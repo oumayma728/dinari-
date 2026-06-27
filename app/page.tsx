@@ -15,8 +15,10 @@ export default function Home() {
   const [cTarget, setCTarget] = useState('')
   const [editingChallenge, setEditingChallenge] = useState<string | null>(null)
   const [editSaved, setEditSaved] = useState('')
-  const [editingBalance, setEditingBalance] = useState(false)
-  const [balanceInput, setBalanceInput] = useState('')
+  const [editingSalary, setEditingSalary] = useState(false)
+  const [salaryInput, setSalaryInput] = useState('')
+  const [editingCarryover, setEditingCarryover] = useState(false)
+  const [carryoverInput, setCarryoverInput] = useState('')
 
   useEffect(() => { setData(loadData()) }, [])
 
@@ -82,53 +84,72 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Balance — tap to edit */}
+          {/* Salary + Carryover → computed balance */}
           <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', margin: 0 }}>Balance</p>
-              <button
-                onClick={() => { setBalanceInput(String(data.balance || '')); setEditingBalance(true) }}
-                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, padding: '2px 7px', color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.3px' }}
-              >
-                EDIT
-              </button>
-            </div>
-            {editingBalance ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <input
-                  type="number" inputMode="decimal" value={balanceInput}
-                  onChange={e => setBalanceInput(e.target.value)}
-                  onBlur={() => {
-                    const v = parseFloat(balanceInput)
-                    if (!isNaN(v)) persist({ ...data, balance: v })
-                    setEditingBalance(false)
-                  }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      const v = parseFloat(balanceInput)
-                      if (!isNaN(v)) persist({ ...data, balance: v })
-                      setEditingBalance(false)
-                    }
-                    if (e.key === 'Escape') setEditingBalance(false)
-                  }}
-                  autoFocus
-                  style={{
-                    background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.25)',
-                    borderRadius: 12, color: 'white', fontSize: 32, fontWeight: 700,
-                    letterSpacing: '-1px', padding: '4px 12px', outline: 'none', width: 180,
-                  }}
-                />
-                <span style={{ fontSize: 15, fontWeight: 500, color: 'rgba(255,255,255,0.4)' }}>TND</span>
+            {/* Two inputs side by side */}
+            <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+              {/* Salary */}
+              <div style={{ flex: 1 }}>
+                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', margin: '0 0 5px' }}>Salary</p>
+                {editingSalary ? (
+                  <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '0 10px' }}>
+                    <input
+                      type="number" inputMode="decimal" value={salaryInput}
+                      onChange={e => setSalaryInput(e.target.value)}
+                      autoFocus
+                      onBlur={() => { const v = parseFloat(salaryInput); if (!isNaN(v)) persist({ ...data, salary: v }); setEditingSalary(false) }}
+                      onKeyDown={e => { if (e.key === 'Enter') { const v = parseFloat(salaryInput); if (!isNaN(v)) persist({ ...data, salary: v }); setEditingSalary(false) } }}
+                      style={{ width: '100%', border: 'none', outline: 'none', background: 'none', color: 'white', fontSize: 18, fontWeight: 700, padding: '8px 0' }}
+                    />
+                  </div>
+                ) : (
+                  <p
+                    className="num"
+                    onClick={() => { setSalaryInput(String(data.salary || '')); setEditingSalary(true) }}
+                    style={{ color: 'white', fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: '-0.8px', cursor: 'pointer' }}
+                  >
+                    {data.salary.toFixed(0)}<span style={{ fontSize: 12, opacity: 0.45, marginLeft: 4 }}>TND</span>
+                  </p>
+                )}
               </div>
-            ) : (
-              <p
-                className="num"
-                onClick={() => { setBalanceInput(String(data.balance || '')); setEditingBalance(true) }}
-                style={{ color: 'white', fontSize: 38, fontWeight: 700, margin: 0, letterSpacing: '-1.5px', lineHeight: 1, cursor: 'pointer' }}
-              >
-                {data.balance.toFixed(0)}<span style={{ fontSize: 16, fontWeight: 500, opacity: 0.5, marginLeft: 6 }}>TND</span>
+
+              <div style={{ width: 1, background: 'rgba(255,255,255,0.1)' }} />
+
+              {/* Carryover */}
+              <div style={{ flex: 1 }}>
+                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', margin: '0 0 5px' }}>From last month</p>
+                {editingCarryover ? (
+                  <div style={{ display: 'flex', alignItems: 'center', background: 'rgba(255,255,255,0.12)', borderRadius: 10, padding: '0 10px' }}>
+                    <input
+                      type="number" inputMode="decimal" value={carryoverInput}
+                      onChange={e => setCarryoverInput(e.target.value)}
+                      autoFocus
+                      onBlur={() => { const v = parseFloat(carryoverInput) || 0; persist({ ...data, carryover: v }); setEditingCarryover(false) }}
+                      onKeyDown={e => { if (e.key === 'Enter') { const v = parseFloat(carryoverInput) || 0; persist({ ...data, carryover: v }); setEditingCarryover(false) } }}
+                      style={{ width: '100%', border: 'none', outline: 'none', background: 'none', color: 'white', fontSize: 18, fontWeight: 700, padding: '8px 0' }}
+                    />
+                  </div>
+                ) : (
+                  <p
+                    className="num"
+                    onClick={() => { setCarryoverInput(String(data.carryover || '')); setEditingCarryover(true) }}
+                    style={{ color: data.carryover > 0 ? '#7EC8A0' : 'rgba(255,255,255,0.35)', fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: '-0.8px', cursor: 'pointer' }}
+                  >
+                    {data.carryover > 0 ? '+' : ''}{(data.carryover || 0).toFixed(0)}<span style={{ fontSize: 12, opacity: 0.5, marginLeft: 4 }}>TND</span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Computed balance */}
+            <div style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 14, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', margin: 0 }}>
+                Total balance
               </p>
-            )}
+              <p className="num" style={{ color: 'white', fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: '-1px' }}>
+                {stats.balance.toFixed(0)}<span style={{ fontSize: 13, fontWeight: 500, opacity: 0.5, marginLeft: 5 }}>TND</span>
+              </p>
+            </div>
           </div>
 
           {/* Planned vs Actual */}
@@ -149,19 +170,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ── SALARY INPUT (if not set) ── */}
-        {data.salary === 0 && (
-          <div className="card" style={{ padding: '16px 18px', marginBottom: 16 }}>
-            <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 10px' }}>Set your monthly salary to calculate planned remaining</p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                type="number" inputMode="decimal" placeholder="Your salary (TND)"
-                className="field" style={{ flex: 1 }}
-                onBlur={e => { const v = parseFloat(e.target.value); if (v > 0) persist({ ...data, salary: v }) }}
-              />
-            </div>
-          </div>
-        )}
 
         {/* ── ACTIVE CATEGORIES ── */}
         {activeCategories.length > 0 && (

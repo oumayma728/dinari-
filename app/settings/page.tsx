@@ -26,13 +26,9 @@ export default function SettingsPage() {
         <input defaultValue={data.name} onBlur={e => persist({ ...data, name: e.target.value.trim() || data.name })}
           className="field" style={{ marginBottom: 20 }} />
 
-        <p className="label" style={{ margin: '0 0 8px' }}>Monthly salary (TND)</p>
-        <input type="number" defaultValue={data.salary || ''} onBlur={e => persist({ ...data, salary: parseFloat(e.target.value) || 0 })}
-          placeholder="e.g. 2000" className="field" style={{ marginBottom: 28 }} />
-
-        <p className="label" style={{ margin: '0 0 8px' }}>Current balance (TND)</p>
-        <input type="number" defaultValue={data.balance || ''} onBlur={e => persist({ ...data, balance: parseFloat(e.target.value) || 0 })}
-          placeholder="e.g. 1200" className="field" style={{ marginBottom: 28 }} />
+        <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 16px', lineHeight: 1.6 }}>
+          Salary and last month's leftover are set directly on the home card — tap the numbers to edit.
+        </p>
 
         <div className="card" style={{ padding: '16px 18px', marginBottom: 24 }}>
           <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 12px', lineHeight: 1.6 }}>All data is stored privately on this device.</p>

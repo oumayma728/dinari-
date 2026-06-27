@@ -44,7 +44,7 @@ export interface WishlistGroup {
 export interface AppData {
   name: string
   salary: number
-  balance: number
+  carryover: number       // extra leftover from last month
   categories: Category[]
   transactions: Transaction[]
   challenges: Challenge[]

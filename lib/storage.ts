@@ -6,7 +6,7 @@ let _cache: AppData | null = null
 const defaults: AppData = {
   name: 'Oumayma',
   salary: 0,
-  balance: 0,
+  carryover: 0,
   categories: [],
   transactions: [],
   challenges: [],
@@ -41,6 +41,9 @@ export function isThisMonth(dateStr: string): boolean {
 }
 
 export function calcStats(data: AppData) {
+  // Balance = salary this month + whatever was left from last month
+  const balance = data.salary + (data.carryover || 0)
+
   const tickedBudget = data.categories
     .filter(c => c.activeThisMonth)
     .reduce((s, c) => s + c.budget, 0)
@@ -49,7 +52,7 @@ export function calcStats(data: AppData) {
     .filter(c => c.active)
     .reduce((s, c) => s + c.targetAmount, 0)
 
-  const plannedRemaining = data.salary - tickedBudget - challengeReserved
+  const plannedRemaining = balance - tickedBudget - challengeReserved
 
   const monthExpenses = data.transactions
     .filter(t => t.type === 'expense' && isThisMonth(t.date))
@@ -59,9 +62,9 @@ export function calcStats(data: AppData) {
     .filter(t => t.type === 'income' && isThisMonth(t.date))
     .reduce((s, t) => s + t.amount, 0)
 
-  const actualRemaining = data.balance + monthIncome - monthExpenses
+  const actualRemaining = balance + monthIncome - monthExpenses
 
-  return { plannedRemaining, actualRemaining, tickedBudget, challengeReserved, monthExpenses, monthIncome }
+  return { balance, plannedRemaining, actualRemaining, tickedBudget, challengeReserved, monthExpenses, monthIncome }
 }
 
 export function getCategorySpent(data: AppData, categoryId: string): number {
