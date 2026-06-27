@@ -1,33 +1,52 @@
-export type Priority = 'high' | 'medium' | 'low'
-export type ExpenseType = 'fixed' | 'one-time' | 'variable'
+export type CategoryType = 'fixed' | 'variable' | 'one-time'
 
-export interface Expense {
+export interface Category {
   id: string
   name: string
+  icon: string
+  type: CategoryType
+  budget: number
+  priority: number        // 1 = highest
+  activeThisMonth: boolean
+}
+
+export interface Transaction {
+  id: string
+  type: 'income' | 'expense'
   amount: number
-  type: ExpenseType
-  priority: Priority
+  date: string            // YYYY-MM-DD
+  description: string
+  categoryId: string
+  createdAt: string
+}
+
+export interface Challenge {
+  id: string
+  name: string
+  targetAmount: number
+  savedAmount: number
+  active: boolean
 }
 
 export interface WishlistItem {
   id: string
   name: string
-  price: number
-  priority: Priority
+  price?: number
+  bought: boolean
 }
 
-export interface AIInsights {
-  overall: string
-  expenses: Record<string, string>   // id → short insight
-  wishlist: Record<string, string>   // id → short insight
-  generatedAt: string
+export interface WishlistGroup {
+  id: string
+  title: string
+  items: WishlistItem[]
 }
 
 export interface AppData {
   name: string
+  salary: number
   balance: number
-  nextMonthIncome: number
-  expenses: Expense[]
-  wishlist: WishlistItem[]
-  insights: AIInsights | null
+  categories: Category[]
+  transactions: Transaction[]
+  challenges: Challenge[]
+  wishlistGroups: WishlistGroup[]
 }

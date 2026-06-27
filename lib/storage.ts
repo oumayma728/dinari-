@@ -1,15 +1,16 @@
 import { AppData } from './types'
 
-const KEY = 'dinari_v3'
+const KEY = 'dinari_v4'
 let _cache: AppData | null = null
 
 const defaults: AppData = {
   name: 'Oumayma',
+  salary: 0,
   balance: 0,
-  nextMonthIncome: 0,
-  expenses: [],
-  wishlist: [],
-  insights: null,
+  categories: [],
+  transactions: [],
+  challenges: [],
+  wishlistGroups: [],
 }
 
 export function loadData(): AppData {
@@ -33,14 +34,38 @@ export function saveData(data: AppData): AppData {
   return data
 }
 
-// Derived calculations (pure, no side effects)
-export function calcTotals(data: AppData) {
-  const fixed = data.expenses.filter(e => e.type === 'fixed').reduce((s, e) => s + e.amount, 0)
-  const oneTime = data.expenses.filter(e => e.type === 'one-time').reduce((s, e) => s + e.amount, 0)
-  const variable = data.expenses.filter(e => e.type === 'variable').reduce((s, e) => s + e.amount, 0)
-  const total = fixed + oneTime + variable
-  const available = data.balance + data.nextMonthIncome
-  const remaining = available - total
-  const savingsCapacity = Math.max(0, remaining)
-  return { fixed, oneTime, variable, total, available, remaining, savingsCapacity }
+export function isThisMonth(dateStr: string): boolean {
+  const d = new Date(dateStr)
+  const now = new Date()
+  return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
+}
+
+export function calcStats(data: AppData) {
+  const tickedBudget = data.categories
+    .filter(c => c.activeThisMonth)
+    .reduce((s, c) => s + c.budget, 0)
+
+  const challengeReserved = data.challenges
+    .filter(c => c.active)
+    .reduce((s, c) => s + c.targetAmount, 0)
+
+  const plannedRemaining = data.salary - tickedBudget - challengeReserved
+
+  const monthExpenses = data.transactions
+    .filter(t => t.type === 'expense' && isThisMonth(t.date))
+    .reduce((s, t) => s + t.amount, 0)
+
+  const monthIncome = data.transactions
+    .filter(t => t.type === 'income' && isThisMonth(t.date))
+    .reduce((s, t) => s + t.amount, 0)
+
+  const actualRemaining = data.balance + monthIncome - monthExpenses
+
+  return { plannedRemaining, actualRemaining, tickedBudget, challengeReserved, monthExpenses, monthIncome }
+}
+
+export function getCategorySpent(data: AppData, categoryId: string): number {
+  return data.transactions
+    .filter(t => t.categoryId === categoryId && t.type === 'expense' && isThisMonth(t.date))
+    .reduce((s, t) => s + t.amount, 0)
 }
