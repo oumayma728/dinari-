@@ -1,112 +1,60 @@
 'use client'
 import { useState, useRef } from 'react'
 import { Mic, Square, Loader2 } from 'lucide-react'
-import { Category } from '@/lib/types'
 
 interface Props {
-  categories: Category[]
-  onTransaction: (data: { amount: number; type: string; category: string; description: string }) => void
+  onResult: (text: string) => void
+  label?: string
 }
 
-export default function VoiceButton({ categories, onTransaction }: Props) {
-  const [state, setState] = useState<'idle' | 'listening' | 'parsing'>('idle')
+export default function VoiceButton({ onResult, label = 'Tap & speak' }: Props) {
+  const [state, setState] = useState<'idle' | 'listening' | 'processing'>('idle')
   const [display, setDisplay] = useState('')
-  // Ref holds latest transcript — fixes stale closure in onend
   const transcriptRef = useRef('')
   const recogRef = useRef<SpeechRecognition | null>(null)
 
   const toggle = () => {
-    if (state === 'listening') {
-      recogRef.current?.stop()
-      return
-    }
-    if (state === 'parsing') return
+    if (state === 'listening') { recogRef.current?.stop(); return }
+    if (state === 'processing') return
 
-    const SR: (new () => SpeechRecognition) | undefined =
-      (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
-    if (!SR) {
-      alert('Voice needs Safari on iPhone.\nGo to: Settings → Safari → Microphone → Allow')
-      return
-    }
+    const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
+    if (!SR) { alert('Voice input requires Safari on iPhone.\nSettings → Safari → Microphone → Allow'); return }
 
-    transcriptRef.current = ''
-    setDisplay('')
-
+    transcriptRef.current = ''; setDisplay('')
     const r: SpeechRecognition = new SR()
-    r.lang = 'en-US'
-    r.interimResults = true
-    r.continuous = false
-
-    r.onresult = (e: SpeechRecognitionEvent) => {
-      let t = ''
-      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript
-      transcriptRef.current = t   // always fresh — no closure issue
-      setDisplay(t)               // only for visual feedback
+    r.lang = 'en-US'; r.interimResults = false; r.maxAlternatives = 1
+    r.onstart = () => setState('listening')
+    r.onresult = (e: SpeechRecognitionEvent) => { transcriptRef.current = e.results[e.results.length - 1][0].transcript; setDisplay(transcriptRef.current) }
+    r.onerror = () => { setState('idle'); setDisplay('') }
+    r.onend = () => {
+      const t = transcriptRef.current; transcriptRef.current = ''; setDisplay('')
+      if (t.trim()) { setState('processing'); onResult(t); setState('idle') }
+      else setState('idle')
     }
-
-    r.onerror = () => setState('idle')
-
-    r.onend = async () => {
-      const final = transcriptRef.current  // read from ref, not state
-      setDisplay('')
-      transcriptRef.current = ''
-
-      if (!final.trim()) { setState('idle'); return }
-      setState('parsing')
-
-      try {
-        const res = await fetch('/api/parse-transaction', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: final, categories: categories.map(c => c.name) }),
-        })
-        const data = await res.json()
-        if (data.amount) onTransaction(data)
-      } catch {
-        // silent fail
-      }
-      setState('idle')
-    }
-
     recogRef.current = r
-    r.start()
-    setState('listening')
+    try { r.start() } catch { setState('idle') }
   }
 
   const isListening = state === 'listening'
-  const isParsing = state === 'parsing'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
       {display && (
-        <div style={{
-          background: 'white', borderRadius: 12, padding: '8px 16px',
-          boxShadow: 'var(--shadow-sm)', fontSize: 13, color: 'var(--text-muted)',
-          maxWidth: 260, textAlign: 'center', fontStyle: 'italic',
-        }}>
-          "{display}"
-        </div>
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic', margin: 0, textAlign: 'center' }}>"{display}"</p>
       )}
-      <button
-        onClick={toggle}
-        disabled={isParsing}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          background: isListening ? 'var(--danger)' : 'var(--primary)',
-          color: 'white', border: 'none', borderRadius: 100,
-          padding: '13px 28px', fontSize: 14, fontWeight: 600,
-          letterSpacing: '-0.1px',
-          boxShadow: isListening ? '0 0 0 5px rgba(184,84,80,0.18)' : 'var(--shadow-md)',
-          transition: 'background 0.15s, box-shadow 0.15s',
-          cursor: isParsing ? 'not-allowed' : 'pointer',
-          opacity: isParsing ? 0.7 : 1,
-        }}
-      >
-        {isParsing
-          ? <Loader2 size={17} style={{ animation: 'spin 0.8s linear infinite' }} />
-          : isListening ? <Square size={15} fill="white" />
-          : <Mic size={17} />}
-        {isParsing ? 'Processing…' : isListening ? 'Tap to stop' : 'Tap & speak'}
+      <button onClick={toggle} disabled={state === 'processing'} style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        background: isListening ? 'var(--pink)' : 'white',
+        color: isListening ? 'white' : 'var(--pink)',
+        border: `1.5px solid ${isListening ? 'var(--pink)' : 'rgba(196,96,122,0.3)'}`,
+        borderRadius: 100, padding: '11px 24px', fontSize: 14, fontWeight: 600,
+        cursor: 'pointer', transition: 'all 0.15s',
+        boxShadow: isListening ? '0 0 0 4px rgba(196,96,122,0.15)' : 'var(--shadow)',
+      }}>
+        {state === 'processing' ? <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} />
+          : isListening ? <Square size={14} fill="white" />
+          : <Mic size={16} />}
+        {state === 'processing' ? 'Processing…' : isListening ? 'Tap to stop' : label}
       </button>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>

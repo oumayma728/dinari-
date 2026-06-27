@@ -1,284 +1,470 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
-import dynamic from 'next/dynamic'
-import { TrendingUp, TrendingDown, Target, AlertTriangle, ChevronRight } from 'lucide-react'
-import {
-  loadData, saveData, addTransaction, getMonthTransactions, getMonthStats,
-  getCategorySpending, getAllTimeBalance, getLast6MonthsStats, getDailySpending,
-  getBudgetAlerts, applyRecurringTransactions, needsRecurringCheck, getMonthKey,
-} from '@/lib/storage'
-import { AppData } from '@/lib/types'
+import { useState, useEffect } from 'react'
+import { Loader2, CheckCircle2, XCircle, AlertTriangle, Trash2, Plus } from 'lucide-react'
+import { loadData, saveData, addTrackedExpense, removeTrackedExpense, getTrackedTotal, monthKey } from '@/lib/storage'
+import { AppData, BudgetPlan, VariableExpense } from '@/lib/types'
 import BottomNav from '@/components/BottomNav'
-import AddTransactionModal from '@/components/AddTransactionModal'
-import VoiceButton from '@/components/VoiceButton'
-import MonthNav from '@/components/MonthNav'
-import RecurringModal from '@/components/RecurringModal'
 import { format } from 'date-fns'
 
-const MonthlyBarChart = dynamic(() => import('@/components/Charts').then(m => ({ default: m.MonthlyBarChart })), { ssr: false, loading: () => <div style={{ height: 160 }} /> })
-const DailyAreaChart = dynamic(() => import('@/components/Charts').then(m => ({ default: m.DailyAreaChart })), { ssr: false, loading: () => <div style={{ height: 100 }} /> })
+type Stage = 'welcome' | 'income' | 'fixed' | 'variable' | 'generating' | 'review' | 'tracking'
 
-const P = { x: 20, top: 'calc(20px + env(safe-area-inset-top))' }
-
-export default function Dashboard() {
+export default function PlanPage() {
   const [data, setData] = useState<AppData | null>(null)
-  const [month, setMonth] = useState(() => { const d = new Date(); d.setDate(1); return d })
-  const [showAdd, setShowAdd] = useState(false)
-  const [showRecurring, setShowRecurring] = useState(false)
+  const [stage, setStage] = useState<Stage>('welcome')
+  const [income, setIncome] = useState('')
+  const [variables, setVariables] = useState<VariableExpense[]>([])
+  const [newName, setNewName] = useState('')
+  const [newAmt, setNewAmt] = useState('')
+  const [newCat, setNewCat] = useState('Other')
+  const [plan, setPlan] = useState<BudgetPlan | null>(null)
+  const [logName, setLogName] = useState('')
+  const [logAmt, setLogAmt] = useState('')
+  const [logCat, setLogCat] = useState('Other')
+  const [showLog, setShowLog] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const d = loadData(); setData(d)
-    if (needsRecurringCheck(d)) setShowRecurring(true)
+    const d = loadData()
+    setData(d)
+    setIncome(d.monthlyIncome ? String(d.monthlyIncome) : '')
+    setVariables(d.variableExpenses || [])
+    if (d.currentPlan?.status === 'accepted') setStage('tracking')
+    else setStage('welcome')
   }, [])
 
-  const monthTxs = useMemo(() => data ? getMonthTransactions(data, month) : [], [data, month])
-  const stats = useMemo(() => getMonthStats(monthTxs, month), [monthTxs, month])
-  const lastMonthTxs = useMemo(() => { if (!data) return []; const lm = new Date(month); lm.setMonth(lm.getMonth() - 1); return getMonthTransactions(data, lm) }, [data, month])
-  const lastStats = useMemo(() => { const lm = new Date(month); lm.setMonth(lm.getMonth() - 1); return getMonthStats(lastMonthTxs, lm) }, [lastMonthTxs, month])
-  const categorySpend = useMemo(() => getCategorySpending(monthTxs), [monthTxs])
-  const allTimeBalance = useMemo(() => data ? getAllTimeBalance(data) : 0, [data])
-  const alerts = useMemo(() => data ? getBudgetAlerts(data, categorySpend) : [], [data, categorySpend])
-  const monthly6 = useMemo(() => data ? getLast6MonthsStats(data) : [], [data])
-  const dailyData = useMemo(() => getDailySpending(monthTxs, month), [monthTxs, month])
-  const spendChange = useMemo(() => lastStats.expenses > 0 ? Math.round(((stats.expenses - lastStats.expenses) / lastStats.expenses) * 100) : 0, [stats.expenses, lastStats.expenses])
-  const topCat = useMemo(() => Object.entries(categorySpend).sort((a, b) => b[1] - a[1])[0], [categorySpend])
-  const sortedCats = useMemo(() => Object.entries(categorySpend).sort((a, b) => b[1] - a[1]).slice(0, 4), [categorySpend])
-  const recentTx = useMemo(() => data?.transactions.slice(0, 5) || [], [data])
+  const refresh = (d: AppData) => { setData({ ...d }) }
 
-  if (!data) return <div style={{ padding: 20, color: 'var(--text-muted)', fontSize: 14 }}>Loading…</div>
+  if (!data) return null
 
-  const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Sbah el khir' : hour < 18 ? 'Msa el khir' : 'Bonsoir'
+  const monthLabel = format(new Date(), 'MMMM yyyy')
+  const cats = [...new Set(data.fixedExpenses.map(e => e.category)), 'Food', 'Transport', 'Bills', 'Entertainment', 'Health', 'Other']
 
-  const handleAdd = (tx: { amount: number; type: string; category: string; description: string; date: string }) =>
-    setData(addTransaction(data, { ...tx, type: tx.type as 'income' | 'expense' }))
-  const handleVoice = (tx: { amount: number; type: string; category: string; description: string }) =>
-    setData(addTransaction(data, { ...tx, type: tx.type as 'income' | 'expense', date: new Date().toISOString().split('T')[0] }))
-  const handleApply = (ids: string[]) => { setData(applyRecurringTransactions(data, ids)); setShowRecurring(false) }
-  const handleSkip = () => { const u = { ...data, lastRecurringCheck: getMonthKey(new Date()) }; saveData(u); setData(u); setShowRecurring(false) }
+  // ── GENERATE PLAN ─────────────────────────────────────────────────────────
+  const generate = async () => {
+    setError('')
+    setStage('generating')
+    const inc = parseFloat(income) || 0
+    const updated = saveData({ ...data, monthlyIncome: inc, variableExpenses: variables })
+    refresh(updated)
+    try {
+      const res = await fetch('/api/generate-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: data.name, income: inc, fixedExpenses: data.fixedExpenses, variableExpenses: variables, wishlist: data.wishlist }),
+      })
+      const p = await res.json()
+      const newPlan: BudgetPlan = { ...p, month: monthKey(), income: inc, status: 'pending' }
+      setPlan(newPlan)
+      setStage('review')
+    } catch {
+      setError('Could not generate plan. Check your connection.')
+      setStage('variable')
+    }
+  }
 
-  return (
-    <div style={{ minHeight: '100dvh', background: 'var(--bg)', paddingBottom: 20 }}>
-      <div style={{ padding: `${P.top} ${P.x}px 0` }}>
+  const acceptPlan = () => {
+    if (!plan) return
+    const accepted = { ...plan, status: 'accepted' as const }
+    const updated = saveData({ ...data, currentPlan: accepted, variableExpenses: variables })
+    refresh(updated)
+    setStage('tracking')
+  }
 
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
-          <div>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, fontWeight: 500 }}>{greeting}</p>
-            <h1 style={{ fontSize: 26, fontWeight: 700, margin: '2px 0 0', letterSpacing: '-0.6px' }}>{data.name}</h1>
-          </div>
-          <div style={{ textAlign: 'right', paddingTop: 4 }}>
-            <p className="label" style={{ margin: '0 0 3px' }}>All-time</p>
-            <p className="num" style={{ fontSize: 17, fontWeight: 700, margin: 0, color: allTimeBalance >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-              {allTimeBalance >= 0 ? '+' : ''}{allTimeBalance.toFixed(0)} TND
-            </p>
-          </div>
-        </div>
+  const rejectPlan = () => { setPlan(null); setStage('variable') }
 
-        <MonthNav month={month} onChange={setMonth} />
+  const resetPlan = () => {
+    const updated = saveData({ ...data, currentPlan: null, trackedExpenses: [], variableExpenses: [] })
+    refresh(updated)
+    setVariables([])
+    setStage('welcome')
+  }
 
-        {/* Balance card */}
-        <div style={{
-          background: 'var(--primary)', borderRadius: 24, padding: '24px 24px 22px',
-          marginBottom: 16, position: 'relative', overflow: 'hidden',
-        }}>
-          <div style={{ position: 'absolute', top: -60, right: -60, width: 180, height: 180, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
-          <div style={{ position: 'absolute', bottom: -40, left: -10, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.03)' }} />
+  const logExpense = () => {
+    if (!logName.trim() || !logAmt) return
+    const updated = addTrackedExpense(data, { name: logName.trim(), amount: parseFloat(logAmt), category: logCat })
+    refresh(updated)
+    setLogName(''); setLogAmt(''); setShowLog(false)
+  }
 
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: 600, letterSpacing: '0.6px', textTransform: 'uppercase', margin: '0 0 6px' }}>
-            Monthly balance
+  const addVariable = () => {
+    if (!newName.trim() || !newAmt) return
+    setVariables(v => [...v, { id: crypto.randomUUID(), name: newName.trim(), amount: parseFloat(newAmt), category: newCat }])
+    setNewName(''); setNewAmt('')
+  }
+
+  const pt = { padding: 'calc(28px + env(safe-area-inset-top)) 24px 0' }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // WELCOME
+  if (stage === 'welcome') return (
+    <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
+      <div style={{ ...pt, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingBottom: 120 }}>
+          <p style={{ fontSize: 13, color: 'var(--pink)', fontWeight: 600, margin: '0 0 8px', letterSpacing: '0.3px' }}>{monthLabel}</p>
+          <h1 style={{ fontSize: 32, fontWeight: 700, margin: '0 0 12px', letterSpacing: '-1px', lineHeight: 1.15 }}>
+            Ready to plan<br />your month?
+          </h1>
+          <p style={{ fontSize: 15, color: 'var(--text-muted)', margin: '0 0 48px', lineHeight: 1.6 }}>
+            Enter your income and expenses. I'll build a realistic budget and tell you exactly what to do with your money.
           </p>
-          <p className="num" style={{ color: 'white', fontSize: 40, fontWeight: 700, margin: '0 0 20px', letterSpacing: '-1.5px', lineHeight: 1 }}>
-            {stats.balance.toFixed(0)}<span style={{ fontSize: 18, fontWeight: 500, opacity: 0.5, marginLeft: 6 }}>TND</span>
-          </p>
-
-          <div style={{ display: 'flex', gap: 0, borderTop: '0.5px solid rgba(255,255,255,0.1)', paddingTop: 16 }}>
-            {[
-              { label: 'Income', val: `+${stats.income.toFixed(0)}`, color: '#7EC8A0' },
-              { label: 'Spent', val: `-${stats.expenses.toFixed(0)}`, color: '#F4A49A' },
-              { label: 'Saved', val: `${stats.savingsRate}%`, color: '#D4A373' },
-            ].map((item, i) => (
-              <div key={item.label} style={{ flex: 1, paddingLeft: i > 0 ? 16 : 0, borderLeft: i > 0 ? '0.5px solid rgba(255,255,255,0.1)' : 'none', marginLeft: i > 0 ? 16 : 0 }}>
-                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', margin: '0 0 3px' }}>{item.label}</p>
-                <p className="num" style={{ color: item.color, fontSize: 16, fontWeight: 700, margin: 0 }}>{item.val}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* KPI row */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 16 }}>
-          <div className="card" style={{ padding: '14px 12px' }}>
-            <p className="label" style={{ margin: '0 0 5px' }}>Daily avg</p>
-            <p className="num" style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: '-0.5px' }}>{stats.dailyAvg.toFixed(0)}</p>
-            <p style={{ fontSize: 10, color: 'var(--text-faint)', margin: '2px 0 0' }}>TND/day</p>
-          </div>
-          <div className="card" style={{ padding: '14px 12px' }}>
-            <p className="label" style={{ margin: '0 0 5px' }}>vs last mo.</p>
-            <p className="num" style={{ fontSize: 18, fontWeight: 700, margin: 0, color: spendChange > 0 ? 'var(--danger)' : spendChange < 0 ? 'var(--success)' : 'var(--text)' }}>
-              {spendChange > 0 ? '+' : ''}{spendChange}%
-            </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 2 }}>
-              {spendChange > 0 ? <TrendingUp size={9} color="var(--danger)" /> : <TrendingDown size={9} color="var(--success)" />}
-              <p style={{ fontSize: 10, color: 'var(--text-faint)', margin: 0 }}>spending</p>
-            </div>
-          </div>
-          <div className="card" style={{ padding: '14px 12px' }}>
-            <p className="label" style={{ margin: '0 0 5px' }}>Top</p>
-            <p style={{ fontSize: 13, fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.2px' }}>
-              {topCat ? topCat[0] : '—'}
-            </p>
-            <p className="num" style={{ fontSize: 10, color: 'var(--text-faint)', margin: '2px 0 0' }}>
-              {topCat ? `${(topCat[1] as number).toFixed(0)} TND` : 'No data'}
-            </p>
-          </div>
-        </div>
-
-        {/* Budget alerts */}
-        {alerts.map(a => (
-          <div key={a.category.id} style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            background: a.pct >= 100 ? 'var(--danger-bg)' : '#FDF6EC',
-            borderRadius: 14, padding: '12px 14px', marginBottom: 10,
-          }}>
-            <AlertTriangle size={15} color={a.pct >= 100 ? 'var(--danger)' : 'var(--accent)'} strokeWidth={2.5} />
-            <div style={{ flex: 1 }}>
-              <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>{a.category.icon} {a.category.name} — {a.pct}%</p>
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '1px 0 0' }}>{a.spent.toFixed(0)} / {a.limit.toFixed(0)} TND</p>
-            </div>
-          </div>
-        ))}
-
-        {/* Goal */}
-        {data.goals[0] && (
-          <div className="card" style={{ padding: '16px 18px', marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 20 }}>{data.goals[0].icon}</span>
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 600, margin: 0, letterSpacing: '-0.2px' }}>{data.goals[0].name}</p>
-                  <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '1px 0 0' }}>
-                    {(data.goals[0].targetAmount - data.goals[0].savedAmount).toFixed(0)} TND to go
-                  </p>
-                </div>
-              </div>
-              <span className="num" style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent)' }}>
-                {Math.round((data.goals[0].savedAmount / data.goals[0].targetAmount) * 100)}%
-              </span>
-            </div>
-            <div style={{ background: 'rgba(26,22,20,0.06)', borderRadius: 99, height: 5 }}>
-              <div style={{ background: 'var(--accent)', borderRadius: 99, height: 5, width: `${Math.min(100, (data.goals[0].savedAmount / data.goals[0].targetAmount) * 100)}%`, transition: 'width 0.5s ease' }} />
-            </div>
-          </div>
-        )}
-
-        {/* Category spending */}
-        {sortedCats.length > 0 && (
-          <>
-            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', margin: '20px 0 12px', letterSpacing: '-0.2px' }}>This month</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-              {sortedCats.map(([cat, amount]) => {
-                const catObj = data.categories.find(c => c.name === cat)
-                const pct = catObj?.budgetLimit ? Math.round(((amount as number) / catObj.budgetLimit) * 100) : null
-                return (
-                  <div key={cat} className="card" style={{ padding: '14px 14px 12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <div style={{ width: 34, height: 34, borderRadius: 10, background: catObj?.color || '#F5F5F5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17 }}>
-                        {catObj?.icon || '📦'}
-                      </div>
-                      {pct !== null && (
-                        <span style={{ fontSize: 10, fontWeight: 700, color: pct >= 100 ? 'var(--danger)' : pct >= 70 ? 'var(--accent)' : 'var(--text-faint)' }}>{pct}%</span>
-                      )}
-                    </div>
-                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 2px', fontWeight: 500 }}>{cat}</p>
-                    <p className="num" style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: '-0.5px' }}>
-                      {(amount as number).toFixed(0)}<span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-faint)', marginLeft: 3 }}>TND</span>
-                    </p>
-                    {catObj?.budgetLimit && (
-                      <div style={{ background: 'rgba(26,22,20,0.06)', borderRadius: 99, height: 3, marginTop: 8 }}>
-                        <div style={{ background: pct! >= 100 ? 'var(--danger)' : 'var(--accent)', borderRadius: 99, height: 3, width: `${Math.min(100, pct!)}%` }} />
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </>
-        )}
-
-        {/* Charts */}
-        {stats.expenses > 0 && (
-          <div className="card" style={{ padding: '16px 18px', marginBottom: 12 }}>
-            <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 12px', letterSpacing: '-0.2px' }}>Daily spending</p>
-            <DailyAreaChart data={dailyData} />
-          </div>
-        )}
-
-        <div className="card" style={{ padding: '16px 18px', marginBottom: 20 }}>
-          <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 12px', letterSpacing: '-0.2px' }}>6-month overview</p>
-          <MonthlyBarChart data={monthly6} />
-          <div style={{ display: 'flex', gap: 14, marginTop: 10, justifyContent: 'center' }}>
-            {[['#7EC8A0', 'Income'], ['#F4A49A', 'Expenses']].map(([c, l]) => (
-              <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <div style={{ width: 8, height: 8, borderRadius: 2, background: c }} />
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{l}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent transactions */}
-        <p style={{ fontSize: 13, fontWeight: 700, margin: '0 0 12px', letterSpacing: '-0.2px' }}>Recent</p>
-        {recentTx.length === 0 ? (
-          <div className="card" style={{ padding: 32, textAlign: 'center' }}>
-            <p style={{ fontSize: 32, margin: '0 0 10px' }}>🌱</p>
-            <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>No transactions yet<br />Tap + or use voice to start</p>
-          </div>
-        ) : (
-          <div className="card" style={{ overflow: 'hidden' }}>
-            {recentTx.map((tx, i) => {
-              const catObj = data.categories.find(c => c.name === tx.category)
-              return (
-                <div key={tx.id} style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px',
-                  borderTop: i > 0 ? '0.5px solid var(--border)' : 'none',
-                }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 12, flexShrink: 0, background: catObj?.color || '#F5F5F5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
-                    {catObj?.icon || '📦'}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 14, fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.2px' }}>{tx.description}</p>
-                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', fontWeight: 500 }}>{tx.category} · {format(new Date(tx.date), 'dd MMM')}</p>
-                  </div>
-                  <span className="num" style={{ fontSize: 15, fontWeight: 700, flexShrink: 0, color: tx.type === 'income' ? 'var(--success)' : 'var(--danger)', letterSpacing: '-0.3px' }}>
-                    {tx.type === 'income' ? '+' : '−'}{tx.amount.toFixed(0)}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* Voice */}
-        <div style={{ margin: '28px 0 20px', display: 'flex', justifyContent: 'center' }}>
-          <VoiceButton categories={data.categories} onTransaction={handleVoice} />
+          <button className="btn-primary" style={{ background: 'var(--pink)' }} onClick={() => setStage('income')}>
+            Start planning →
+          </button>
         </div>
       </div>
-
-      {/* FAB */}
-      <button onClick={() => setShowAdd(true)} style={{
-        position: 'fixed', bottom: 'calc(72px + env(safe-area-inset-bottom) + 16px)', right: 20,
-        width: 54, height: 54, borderRadius: '50%', background: 'var(--primary)', border: 'none', color: 'white',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: '0 4px 20px rgba(26,46,47,0.35)', zIndex: 40, fontSize: 28, fontWeight: 300,
-      }}>+</button>
-
-      {showAdd && <AddTransactionModal categories={data.categories} onAdd={handleAdd} onClose={() => setShowAdd(false)} />}
-      {showRecurring && data.recurring.filter(r => r.active).length > 0 && (
-        <RecurringModal recurring={data.recurring} onApply={handleApply} onSkip={handleSkip} />
-      )}
-      <div className="safe-bottom" />
       <BottomNav />
+    </div>
+  )
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // INCOME
+  if (stage === 'income') return (
+    <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
+      <div style={{ ...pt }}>
+        <Step current={1} total={3} />
+        <h2 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 6px', letterSpacing: '-0.6px' }}>What's your income?</h2>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: '0 0 32px' }}>Salary, freelance, any money coming in this month.</p>
+        <p className="label" style={{ margin: '0 0 8px' }}>Monthly income</p>
+        <div style={{ display: 'flex', alignItems: 'center', background: 'var(--pink-faint)', borderRadius: 14, padding: '14px 16px', marginBottom: 32 }}>
+          <input
+            type="number" inputMode="decimal" value={income} onChange={e => setIncome(e.target.value)}
+            placeholder="0" autoFocus
+            style={{ flex: 1, border: 'none', outline: 'none', background: 'none', fontSize: 28, fontWeight: 700, letterSpacing: '-0.8px', color: 'var(--text)' }}
+          />
+          <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-muted)' }}>TND</span>
+        </div>
+        <button className="btn-primary" style={{ background: parseFloat(income) > 0 ? 'var(--pink)' : 'var(--text-faint)', marginBottom: 12 }}
+          onClick={() => parseFloat(income) > 0 && setStage('fixed')} disabled={!(parseFloat(income) > 0)}>
+          Next →
+        </button>
+      </div>
+      <BottomNav />
+    </div>
+  )
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // FIXED EXPENSES
+  if (stage === 'fixed') return (
+    <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
+      <div style={{ ...pt }}>
+        <Step current={2} total={3} />
+        <h2 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 6px', letterSpacing: '-0.6px' }}>Fixed expenses</h2>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: '0 0 24px' }}>
+          These auto-load every month. Edit them in Expenses tab.
+        </p>
+        {data.fixedExpenses.length === 0 ? (
+          <div style={{ background: 'var(--pink-faint)', borderRadius: 16, padding: '20px', marginBottom: 24, textAlign: 'center' }}>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>No fixed expenses yet.<br />Add them in the Expenses tab.</p>
+          </div>
+        ) : (
+          <div style={{ background: 'white', borderRadius: 18, overflow: 'hidden', boxShadow: 'var(--shadow)', marginBottom: 24 }}>
+            {data.fixedExpenses.map((e, i) => (
+              <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
+                <div>
+                  <p style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>{e.name}</p>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0', fontWeight: 500 }}>{e.category}</p>
+                </div>
+                <p className="num" style={{ fontSize: 15, fontWeight: 700, margin: 0, color: 'var(--pink)' }}>{e.amount} TND</p>
+              </div>
+            ))}
+            <div style={{ padding: '12px 18px', borderTop: '0.5px solid var(--border)', background: 'var(--pink-faint)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--pink)' }}>Total fixed</span>
+                <span className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--pink)' }}>
+                  {data.fixedExpenses.reduce((s, e) => s + e.amount, 0).toFixed(0)} TND
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+        <button className="btn-primary" style={{ background: 'var(--pink)', marginBottom: 12 }} onClick={() => setStage('variable')}>
+          Next →
+        </button>
+        <button className="btn-ghost" onClick={() => setStage('income')}>← Back</button>
+      </div>
+      <BottomNav />
+    </div>
+  )
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // VARIABLE EXPENSES
+  if (stage === 'variable') return (
+    <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
+      <div style={{ ...pt }}>
+        <Step current={3} total={3} />
+        <h2 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 6px', letterSpacing: '-0.6px' }}>Other expenses</h2>
+        <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: '0 0 24px' }}>
+          Planned spending this month — groceries, outings, subscriptions, etc.
+        </p>
+
+        {variables.length > 0 && (
+          <div style={{ background: 'white', borderRadius: 18, overflow: 'hidden', boxShadow: 'var(--shadow)', marginBottom: 16 }}>
+            {variables.map((v, i) => (
+              <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 18px', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 14, fontWeight: 500, margin: 0 }}>{v.name}</p>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '1px 0 0', fontWeight: 500 }}>{v.category}</p>
+                </div>
+                <p className="num" style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>{v.amount} TND</p>
+                <button onClick={() => setVariables(vs => vs.filter(x => x.id !== v.id))} style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}>
+                  <Trash2 size={14} color="var(--text-faint)" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add variable */}
+        <div style={{ background: 'white', borderRadius: 18, padding: '16px', boxShadow: 'var(--shadow)', marginBottom: 24 }}>
+          <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Expense name"
+            style={{ width: '100%', border: 'none', outline: 'none', background: 'var(--pink-faint)', borderRadius: 11, padding: '11px 14px', fontSize: 14, marginBottom: 10 }} />
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            <input type="number" value={newAmt} onChange={e => setNewAmt(e.target.value)} placeholder="Amount"
+              style={{ flex: 1, border: 'none', outline: 'none', background: 'var(--pink-faint)', borderRadius: 11, padding: '11px 14px', fontSize: 14 }} />
+            <select value={newCat} onChange={e => setNewCat(e.target.value)}
+              style={{ flex: 1, border: 'none', outline: 'none', background: 'var(--pink-faint)', borderRadius: 11, padding: '11px 14px', fontSize: 14, color: 'var(--text)' }}>
+              {['Food', 'Transport', 'Bills', 'Entertainment', 'Health', 'Shopping', 'Other'].map(c => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <button onClick={addVariable} disabled={!newName.trim() || !newAmt}
+            style={{ width: '100%', padding: '11px', borderRadius: 11, border: 'none', background: newName.trim() && newAmt ? 'var(--pink-light)' : 'var(--border)', color: newName.trim() && newAmt ? 'var(--pink)' : 'var(--text-faint)', fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <Plus size={15} /> Add expense
+          </button>
+        </div>
+
+        {error && <p style={{ color: 'var(--pink)', fontSize: 13, marginBottom: 12, fontWeight: 500 }}>{error}</p>}
+
+        <button className="btn-primary" style={{ background: 'var(--pink)', marginBottom: 12 }} onClick={generate}>
+          Generate my budget plan →
+        </button>
+        <button className="btn-ghost" onClick={() => setStage('fixed')}>← Back</button>
+      </div>
+      <BottomNav />
+    </div>
+  )
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // GENERATING
+  if (stage === 'generating') return (
+    <div style={{ minHeight: '100dvh', background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      <Loader2 size={36} color="var(--pink)" style={{ animation: 'spin 0.9s linear infinite', marginBottom: 20 }} />
+      <p style={{ fontSize: 16, fontWeight: 600, margin: '0 0 6px', letterSpacing: '-0.3px' }}>Building your plan…</p>
+      <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>AI is crunching your numbers</p>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  )
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // REVIEW
+  if (stage === 'review' && plan) {
+    const inc = parseFloat(income)
+    const leftover = inc - plan.fixedTotal - plan.variableTotal - plan.savingsAmount
+    return (
+      <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
+        <div style={{ ...pt }}>
+          <p style={{ fontSize: 13, color: 'var(--pink)', fontWeight: 600, margin: '0 0 4px' }}>Your plan for {monthLabel}</p>
+          <h2 style={{ fontSize: 24, fontWeight: 700, margin: '0 0 24px', letterSpacing: '-0.6px' }}>Here's what I recommend</h2>
+
+          {/* Warnings */}
+          {plan.warnings.length > 0 && (
+            <div style={{ background: 'var(--warning-bg)', borderRadius: 14, padding: '14px 16px', marginBottom: 16 }}>
+              {plan.warnings.map((w, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: i < plan.warnings.length - 1 ? 8 : 0 }}>
+                  <AlertTriangle size={15} color="var(--warning)" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <p style={{ fontSize: 13, color: 'var(--warning)', margin: 0, fontWeight: 500, lineHeight: 1.5 }}>{w}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Numbers */}
+          <div style={{ background: 'white', borderRadius: 18, overflow: 'hidden', boxShadow: 'var(--shadow)', marginBottom: 16 }}>
+            {[
+              { label: 'Monthly income', val: `${inc.toFixed(0)} TND`, accent: false },
+              { label: 'Fixed expenses', val: `− ${plan.fixedTotal.toFixed(0)} TND`, accent: false },
+              { label: 'Planned expenses', val: `− ${plan.variableTotal.toFixed(0)} TND`, accent: false },
+              { label: 'Savings', val: `− ${plan.savingsAmount.toFixed(0)} TND (${plan.savingsPct}%)`, accent: false },
+            ].map((row, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 18px', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
+                <span style={{ fontSize: 14, color: 'var(--text-muted)', fontWeight: 500 }}>{row.label}</span>
+                <span className="num" style={{ fontSize: 14, fontWeight: 600 }}>{row.val}</span>
+              </div>
+            ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 18px', borderTop: '1.5px solid var(--pink-light)', background: 'var(--pink-faint)' }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--pink)' }}>Safe to spend</span>
+              <span className="num" style={{ fontSize: 16, fontWeight: 700, color: 'var(--pink)' }}>{plan.safeSpendingLimit.toFixed(0)} TND</span>
+            </div>
+          </div>
+
+          {/* Daily / weekly */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+            <div style={{ background: 'white', borderRadius: 16, padding: '16px', boxShadow: 'var(--shadow)' }}>
+              <p className="label" style={{ margin: '0 0 6px' }}>Daily limit</p>
+              <p className="num" style={{ fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: '-0.8px' }}>{plan.dailyLimit.toFixed(0)}</p>
+              <p style={{ fontSize: 12, color: 'var(--text-faint)', margin: '2px 0 0', fontWeight: 500 }}>TND/day</p>
+            </div>
+            <div style={{ background: 'white', borderRadius: 16, padding: '16px', boxShadow: 'var(--shadow)' }}>
+              <p className="label" style={{ margin: '0 0 6px' }}>Weekly limit</p>
+              <p className="num" style={{ fontSize: 22, fontWeight: 700, margin: 0, letterSpacing: '-0.8px' }}>{plan.weeklyLimit.toFixed(0)}</p>
+              <p style={{ fontSize: 12, color: 'var(--text-faint)', margin: '2px 0 0', fontWeight: 500 }}>TND/week</p>
+            </div>
+          </div>
+
+          {/* Wishlist timeline */}
+          {plan.wishlistTimeline.length > 0 && (
+            <div style={{ background: 'white', borderRadius: 18, overflow: 'hidden', boxShadow: 'var(--shadow)', marginBottom: 16 }}>
+              <p style={{ fontSize: 13, fontWeight: 700, padding: '14px 18px 10px', margin: 0 }}>Wishlist timeline</p>
+              {plan.wishlistTimeline.map((w, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 18px', borderTop: '0.5px solid var(--border)' }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{w.name}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: w.months <= 3 ? 'var(--success)' : w.months <= 6 ? 'var(--warning)' : 'var(--text-muted)' }}>
+                    {w.months <= 0 ? 'This month!' : `${w.months} month${w.months > 1 ? 's' : ''}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* AI advice */}
+          <div style={{ background: 'var(--pink-faint)', borderRadius: 16, padding: '16px', marginBottom: 24 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--pink)', margin: '0 0 6px' }}>Dinari says</p>
+            <p style={{ fontSize: 14, color: 'var(--text)', margin: 0, lineHeight: 1.6 }}>{plan.advice}</p>
+          </div>
+
+          {/* Accept / modify / reject */}
+          <button className="btn-primary" style={{ background: 'var(--pink)', marginBottom: 10 }} onClick={acceptPlan}>
+            ✓ Accept this plan
+          </button>
+          <button className="btn-ghost" style={{ marginBottom: 10 }} onClick={rejectPlan}>
+            ↺ Modify expenses
+          </button>
+          <button onClick={() => { setPlan(null); setStage('income') }}
+            style={{ width: '100%', padding: '12px', border: 'none', background: 'none', color: 'var(--text-faint)', fontSize: 13, cursor: 'pointer', fontWeight: 500 }}>
+            Start over
+          </button>
+        </div>
+        <div className="safe-b" />
+        <BottomNav />
+      </div>
+    )
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // TRACKING
+  if (stage === 'tracking' && (data.currentPlan || plan)) {
+    const activePlan = data.currentPlan!
+    const spent = getTrackedTotal(data)
+    const remaining = activePlan.safeSpendingLimit - spent
+    const pct = Math.min(100, Math.round((spent / activePlan.safeSpendingLimit) * 100))
+    const isOver = remaining < 0
+    const barColor = pct >= 90 ? 'var(--pink)' : pct >= 70 ? 'var(--warning)' : 'var(--success)'
+
+    return (
+      <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
+        <div style={{ ...pt }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+            <div>
+              <p style={{ fontSize: 12, color: 'var(--pink)', fontWeight: 600, margin: '0 0 3px', letterSpacing: '0.3px' }}>{monthLabel}</p>
+              <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, letterSpacing: '-0.7px' }}>Tracking</h1>
+            </div>
+            <button onClick={resetPlan} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 100, padding: '6px 12px', fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 500 }}>
+              New month
+            </button>
+          </div>
+
+          {/* Main remaining */}
+          <div style={{ marginBottom: 28 }}>
+            <p className="label" style={{ margin: '0 0 6px' }}>Safe to spend</p>
+            <p className="num" style={{ fontSize: 44, fontWeight: 700, margin: '0 0 16px', letterSpacing: '-1.5px', lineHeight: 1, color: isOver ? 'var(--pink)' : 'var(--text)' }}>
+              {remaining.toFixed(0)}<span style={{ fontSize: 18, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 6 }}>TND</span>
+            </p>
+            {isOver && <p style={{ fontSize: 13, color: 'var(--pink)', fontWeight: 600, marginBottom: 12 }}>⚠️ Over budget by {Math.abs(remaining).toFixed(0)} TND</p>}
+
+            {/* Progress bar */}
+            <div style={{ background: 'rgba(26,22,20,0.07)', borderRadius: 99, height: 8, marginBottom: 8 }}>
+              <div style={{ background: barColor, borderRadius: 99, height: 8, width: `${pct}%`, transition: 'width 0.4s ease' }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Spent {spent.toFixed(0)} TND</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>{pct}% used</span>
+            </div>
+          </div>
+
+          {/* Daily / weekly from plan */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 24 }}>
+            <div style={{ background: 'white', borderRadius: 16, padding: '14px', boxShadow: 'var(--shadow)' }}>
+              <p className="label" style={{ margin: '0 0 4px' }}>Daily limit</p>
+              <p className="num" style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: '-0.6px' }}>{activePlan.dailyLimit.toFixed(0)}</p>
+              <p style={{ fontSize: 11, color: 'var(--text-faint)', margin: '2px 0 0', fontWeight: 500 }}>TND/day</p>
+            </div>
+            <div style={{ background: 'white', borderRadius: 16, padding: '14px', boxShadow: 'var(--shadow)' }}>
+              <p className="label" style={{ margin: '0 0 4px' }}>Weekly limit</p>
+              <p className="num" style={{ fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: '-0.6px' }}>{activePlan.weeklyLimit.toFixed(0)}</p>
+              <p style={{ fontSize: 11, color: 'var(--text-faint)', margin: '2px 0 0', fontWeight: 500 }}>TND/week</p>
+            </div>
+          </div>
+
+          {/* Log expense */}
+          {showLog ? (
+            <div style={{ background: 'white', borderRadius: 18, padding: '16px', boxShadow: 'var(--shadow)', marginBottom: 20 }}>
+              <p style={{ fontSize: 14, fontWeight: 700, margin: '0 0 12px', letterSpacing: '-0.2px' }}>Log an expense</p>
+              <input value={logName} onChange={e => setLogName(e.target.value)} placeholder="What did you spend on?"
+                style={{ width: '100%', padding: '11px 14px', borderRadius: 11, border: 'none', background: 'var(--pink-faint)', fontSize: 14, marginBottom: 10, outline: 'none' }} />
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <input type="number" value={logAmt} onChange={e => setLogAmt(e.target.value)} placeholder="Amount (TND)"
+                  style={{ flex: 1, padding: '11px 14px', borderRadius: 11, border: 'none', background: 'var(--pink-faint)', fontSize: 14, outline: 'none' }} />
+                <select value={logCat} onChange={e => setLogCat(e.target.value)}
+                  style={{ flex: 1, padding: '11px 14px', borderRadius: 11, border: 'none', background: 'var(--pink-faint)', fontSize: 14, color: 'var(--text)', outline: 'none' }}>
+                  {['Food', 'Transport', 'Bills', 'Entertainment', 'Health', 'Shopping', 'Other'].map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setShowLog(false)} className="btn-ghost" style={{ flex: 1 }}>Cancel</button>
+                <button onClick={logExpense} className="btn-primary" style={{ flex: 2, background: 'var(--pink)' }}>Save</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowLog(true)} className="btn-primary" style={{ background: 'var(--pink)', marginBottom: 20 }}>
+              + Log expense
+            </button>
+          )}
+
+          {/* Expense history */}
+          {data.trackedExpenses.length > 0 && (
+            <>
+              <p className="label" style={{ margin: '0 0 10px' }}>This month</p>
+              <div style={{ background: 'white', borderRadius: 18, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
+                {data.trackedExpenses.map((t, i) => (
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: 14, fontWeight: 500, margin: 0 }}>{t.name}</p>
+                      <p style={{ fontSize: 11, color: 'var(--text-faint)', margin: '2px 0 0', fontWeight: 500 }}>{t.category} · {format(new Date(t.date), 'dd MMM')}</p>
+                    </div>
+                    <p className="num" style={{ fontSize: 14, fontWeight: 700, margin: 0, color: 'var(--pink)' }}>−{t.amount.toFixed(0)}</p>
+                    <button onClick={() => refresh(removeTrackedExpense(data, t.id))} style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}>
+                      <Trash2 size={14} color="var(--text-faint)" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="safe-b" />
+        <BottomNav />
+      </div>
+    )
+  }
+
+  return null
+}
+
+function Step({ current, total }: { current: number; total: number }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
+      {Array.from({ length: total }, (_, i) => (
+        <div key={i} style={{ height: 3, flex: 1, borderRadius: 99, background: i < current ? 'var(--pink)' : 'rgba(26,22,20,0.1)', transition: 'background 0.3s' }} />
+      ))}
     </div>
   )
 }

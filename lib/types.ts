@@ -1,28 +1,15 @@
-export interface Transaction {
+export interface FixedExpense {
   id: string
+  name: string
   amount: number
-  type: 'income' | 'expense'
   category: string
-  description: string
-  date: string
-  createdAt: string
 }
 
-export interface Category {
+export interface VariableExpense {
   id: string
   name: string
-  icon: string
-  color: string
-  budgetLimit?: number
-}
-
-export interface Goal {
-  id: string
-  name: string
-  targetAmount: number
-  savedAmount: number
-  icon: string
-  deadline?: string
+  amount: number
+  category: string
 }
 
 export interface WishlistItem {
@@ -30,28 +17,38 @@ export interface WishlistItem {
   name: string
   estimatedPrice: number
   priority: 'low' | 'medium' | 'high'
-  notes?: string
-  bought: boolean
-  createdAt: string
 }
 
-export interface RecurringTransaction {
+export interface BudgetPlan {
+  month: string            // YYYY-MM
+  income: number
+  fixedTotal: number
+  variableTotal: number
+  safeSpendingLimit: number
+  dailyLimit: number
+  weeklyLimit: number
+  savingsAmount: number
+  savingsPct: number
+  warnings: string[]
+  wishlistTimeline: { name: string; months: number }[]
+  advice: string
+  status: 'pending' | 'accepted'
+}
+
+export interface TrackedExpense {
   id: string
+  name: string
   amount: number
-  type: 'income' | 'expense'
+  date: string
   category: string
-  description: string
-  dayOfMonth: number
-  active: boolean
 }
 
 export interface AppData {
   name: string
   monthlyIncome: number
-  categories: Category[]
-  transactions: Transaction[]
-  goals: Goal[]
+  fixedExpenses: FixedExpense[]
+  variableExpenses: VariableExpense[]    // set during monthly planning
   wishlist: WishlistItem[]
-  recurring: RecurringTransaction[]
-  lastRecurringCheck?: string
+  currentPlan: BudgetPlan | null
+  trackedExpenses: TrackedExpense[]
 }
