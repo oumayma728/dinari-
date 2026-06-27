@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { Send, Loader2, Mic } from 'lucide-react'
-import { loadData, getMonthStats } from '@/lib/storage'
+import { loadData, getMonthStats, getMonthTransactions } from '@/lib/storage'
 import { AppData } from '@/lib/types'
 import BottomNav from '@/components/BottomNav'
 
@@ -27,7 +27,8 @@ export default function Chat() {
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   const buildContext = (d: AppData) => {
-    const { income, expenses, balance } = getMonthStats(d)
+    const txs = getMonthTransactions(d, new Date())
+    const { income, expenses, balance } = getMonthStats(txs, new Date())
     return {
       name: d.name,
       monthlyIncome: d.monthlyIncome,

@@ -93,12 +93,12 @@ export default function Settings() {
         <Section id="profile" title="👤 Profile">
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Your name</label>
-            <input value={data.name} onChange={e => persist({ ...data, name: e.target.value })}
+            <input defaultValue={data.name} onBlur={e => persist({ ...data, name: e.target.value })}
               style={{ width: '100%', padding: '11px 14px', borderRadius: 12, border: '0.5px solid var(--border)', background: 'white', fontSize: 14, outline: 'none' }} />
           </div>
           <div>
             <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Monthly income (TND)</label>
-            <input type="number" value={data.monthlyIncome || ''} onChange={e => persist({ ...data, monthlyIncome: parseFloat(e.target.value) || 0 })} placeholder="0.000"
+            <input type="number" defaultValue={data.monthlyIncome || ''} onBlur={e => persist({ ...data, monthlyIncome: parseFloat(e.target.value) || 0 })} placeholder="0.000"
               style={{ width: '100%', padding: '11px 14px', borderRadius: 12, border: '0.5px solid var(--border)', background: 'white', fontSize: 14, outline: 'none' }} />
           </div>
         </Section>
