@@ -1,20 +1,15 @@
-import { AppData, FixedExpense, VariableExpense, WishlistItem, BudgetPlan, TrackedExpense } from './types'
+import { AppData } from './types'
 
-const KEY = 'dinari_v2'
+const KEY = 'dinari_v3'
 let _cache: AppData | null = null
 
 const defaults: AppData = {
   name: 'Oumayma',
-  monthlyIncome: 0,
-  fixedExpenses: [],
-  variableExpenses: [],
+  balance: 0,
+  nextMonthIncome: 0,
+  expenses: [],
   wishlist: [],
-  currentPlan: null,
-  trackedExpenses: [],
-}
-
-export function monthKey(d = new Date()) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  insights: null,
 }
 
 export function loadData(): AppData {
@@ -23,18 +18,7 @@ export function loadData(): AppData {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) { _cache = { ...defaults }; return _cache }
-    const p = JSON.parse(raw)
-    _cache = { ...defaults, ...p } as AppData
-    // If plan is from a previous month, clear it + tracked expenses
-    if (_cache.currentPlan && _cache.currentPlan.month !== monthKey()) {
-      _cache = {
-        ..._cache,
-        currentPlan: null,
-        trackedExpenses: [],
-        variableExpenses: [],  // reset variable, suggest from previous via UI
-      }
-      save(_cache)
-    }
+    _cache = { ...defaults, ...JSON.parse(raw) } as AppData
     return _cache
   } catch {
     _cache = { ...defaults } as AppData
@@ -42,25 +26,21 @@ export function loadData(): AppData {
   }
 }
 
-function save(data: AppData) {
-  _cache = data
-  setTimeout(() => localStorage.setItem(KEY, JSON.stringify(data)), 0)
-}
-
 export function saveData(data: AppData): AppData {
-  save(data)
+  _cache = data
+  if (typeof window !== 'undefined')
+    setTimeout(() => localStorage.setItem(KEY, JSON.stringify(data)), 0)
   return data
 }
 
-export function getTrackedTotal(data: AppData) {
-  return data.trackedExpenses.reduce((s, t) => s + t.amount, 0)
-}
-
-export function addTrackedExpense(data: AppData, exp: Omit<TrackedExpense, 'id' | 'date'>): AppData {
-  const t: TrackedExpense = { ...exp, id: crypto.randomUUID(), date: new Date().toISOString().split('T')[0] }
-  return saveData({ ...data, trackedExpenses: [t, ...data.trackedExpenses] })
-}
-
-export function removeTrackedExpense(data: AppData, id: string): AppData {
-  return saveData({ ...data, trackedExpenses: data.trackedExpenses.filter(t => t.id !== id) })
+// Derived calculations (pure, no side effects)
+export function calcTotals(data: AppData) {
+  const fixed = data.expenses.filter(e => e.type === 'fixed').reduce((s, e) => s + e.amount, 0)
+  const oneTime = data.expenses.filter(e => e.type === 'one-time').reduce((s, e) => s + e.amount, 0)
+  const variable = data.expenses.filter(e => e.type === 'variable').reduce((s, e) => s + e.amount, 0)
+  const total = fixed + oneTime + variable
+  const available = data.balance + data.nextMonthIncome
+  const remaining = available - total
+  const savingsCapacity = Math.max(0, remaining)
+  return { fixed, oneTime, variable, total, available, remaining, savingsCapacity }
 }
