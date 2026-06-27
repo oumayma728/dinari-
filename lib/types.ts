@@ -13,6 +13,7 @@ export interface Category {
   name: string
   icon: string
   color: string
+  budgetLimit?: number
 }
 
 export interface Goal {
@@ -34,6 +35,16 @@ export interface WishlistItem {
   createdAt: string
 }
 
+export interface RecurringTransaction {
+  id: string
+  amount: number
+  type: 'income' | 'expense'
+  category: string
+  description: string
+  dayOfMonth: number
+  active: boolean
+}
+
 export interface AppData {
   name: string
   monthlyIncome: number
@@ -41,4 +52,6 @@ export interface AppData {
   transactions: Transaction[]
   goals: Goal[]
   wishlist: WishlistItem[]
+  recurring: RecurringTransaction[]
+  lastRecurringCheck?: string
 }

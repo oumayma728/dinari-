@@ -18,7 +18,7 @@ export default function VoiceButton({ categories, onTransaction }: Props) {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) { alert('Voice not supported on this browser. Try Safari on iPhone.'); return }
     const r: SpeechRecognition = new SR()
-    r.lang = 'fr-FR'
+    r.lang = 'en-US'
     r.interimResults = true
     r.onresult = (e: SpeechRecognitionEvent) => {
       const t = Array.from(e.results).map((res: SpeechRecognitionResult) => res[0].transcript).join('')

@@ -77,7 +77,7 @@ export default function Chat() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SR) return
     const r: SpeechRecognition = new SR()
-    r.lang = 'fr-FR'
+    r.lang = 'en-US'
     r.onresult = (e: SpeechRecognitionEvent) => {
       const t = e.results[0][0].transcript
       send(t)

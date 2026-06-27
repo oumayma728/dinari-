@@ -16,7 +16,7 @@ export default function Wishlist() {
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
   const [notes, setNotes] = useState('')
   const [planning, setPlanningId] = useState<string | null>(null)
-  const [plan, setPlan] = useState('')
+  const [plans, setPlans] = useState<Record<string, string>>({})
 
   useEffect(() => { setData(loadData()) }, [])
 
@@ -52,8 +52,7 @@ export default function Wishlist() {
 
   const getPlan = async (item: WishlistItem) => {
     setPlanningId(item.id)
-    setPlan('')
-    const { income, expenses } = { income: data.monthlyIncome, expenses: 0 }
+    setPlans(p => ({ ...p, [item.id]: '' }))
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -69,7 +68,7 @@ export default function Wishlist() {
       const { done, value } = await reader.read()
       if (done) break
       full += decoder.decode(value)
-      setPlan(full)
+      setPlans(p => ({ ...p, [item.id]: full }))
     }
     setPlanningId(null)
   }
@@ -163,9 +162,9 @@ export default function Wishlist() {
               }}>
                 {planning === item.id ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Planning...</> : '✨ Help me save for this'}
               </button>
-              {plan && planning === null && (
+              {plans[item.id] && (
                 <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 10, background: 'rgba(61,90,92,0.06)', fontSize: 13, lineHeight: 1.6, color: 'var(--text)' }}>
-                  {plan}
+                  {plans[item.id]}
                 </div>
               )}
             </div>

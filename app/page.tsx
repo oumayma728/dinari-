@@ -1,84 +1,168 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Plus, Target } from 'lucide-react'
-import { loadData, addTransaction, getMonthStats, getCategorySpending } from '@/lib/storage'
+import { TrendingUp, TrendingDown, Target, AlertTriangle, Plus } from 'lucide-react'
+import {
+  loadData, saveData, addTransaction, getMonthStats, getLastMonthStats,
+  getCategorySpending, getAllTimeBalance, getLast6MonthsStats, getDailySpending,
+  getBudgetAlerts, applyRecurringTransactions, needsRecurringCheck,
+} from '@/lib/storage'
 import { AppData } from '@/lib/types'
 import BottomNav from '@/components/BottomNav'
 import AddTransactionModal from '@/components/AddTransactionModal'
 import VoiceButton from '@/components/VoiceButton'
+import MonthNav from '@/components/MonthNav'
+import RecurringModal from '@/components/RecurringModal'
+import { MonthlyBarChart, DailyAreaChart } from '@/components/Charts'
 import { format } from 'date-fns'
 
 export default function Dashboard() {
   const [data, setData] = useState<AppData | null>(null)
+  const [month, setMonth] = useState(new Date())
   const [showAdd, setShowAdd] = useState(false)
+  const [showRecurring, setShowRecurring] = useState(false)
 
-  useEffect(() => { setData(loadData()) }, [])
+  useEffect(() => {
+    const d = loadData()
+    setData(d)
+    if (needsRecurringCheck(d)) setShowRecurring(true)
+  }, [])
 
-  if (!data) return <div style={{ padding: 20, color: 'var(--text-muted)' }}>Loading...</div>
+  const refresh = () => setData(loadData())
 
-  const { income, expenses, balance } = getMonthStats(data)
-  const categorySpend = getCategorySpending(data)
+  if (!data) return <div style={{ padding: 20, color: 'var(--text-muted)', fontSize: 14 }}>Loading Dinari...</div>
+
+  const { income, expenses, balance, savingsRate, dailyAvg } = getMonthStats(data, month)
+  const lastMonth = getLastMonthStats(data)
+  const allTimeBalance = getAllTimeBalance(data)
+  const categorySpend = getCategorySpending(data, month)
+  const alerts = getBudgetAlerts(data, month)
+  const monthly6 = getLast6MonthsStats(data)
+  const dailyData = getDailySpending(data, month)
   const recentTx = data.transactions.slice(0, 5)
 
-  const handleAdd = (txData: { amount: number; type: string; category: string; description: string; date: string }) => {
-    addTransaction({ ...txData, type: txData.type as 'income' | 'expense', date: txData.date || new Date().toISOString().split('T')[0] })
-    setData(loadData())
-  }
-
-  const handleVoice = (txData: { amount: number; type: string; category: string; description: string }) => {
-    addTransaction({ ...txData, type: txData.type as 'income' | 'expense', date: new Date().toISOString().split('T')[0] })
-    setData(loadData())
-  }
+  const spendChange = lastMonth.expenses > 0
+    ? Math.round(((expenses - lastMonth.expenses) / lastMonth.expenses) * 100)
+    : 0
+  const topCat = Object.entries(categorySpend).sort((a, b) => b[1] - a[1])[0]
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Sbah el khir' : hour < 18 ? 'Msa el khir' : 'Bonsoir'
+
+  const handleAdd = (txData: { amount: number; type: string; category: string; description: string; date: string }) => {
+    addTransaction({ ...txData, type: txData.type as 'income' | 'expense' })
+    refresh()
+  }
+  const handleVoice = (txData: { amount: number; type: string; category: string; description: string }) => {
+    addTransaction({ ...txData, type: txData.type as 'income' | 'expense', date: new Date().toISOString().split('T')[0] })
+    refresh()
+  }
+  const handleApplyRecurring = (ids: string[]) => {
+    const updated = applyRecurringTransactions(data, ids)
+    saveData(updated)
+    refresh()
+    setShowRecurring(false)
+  }
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
       <div style={{ padding: '16px 20px 0', paddingTop: 'calc(16px + env(safe-area-inset-top))' }}>
 
-        <div style={{ marginBottom: 16 }}>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>{greeting} ✦</p>
-          <h1 style={{ fontSize: 22, fontWeight: 600, margin: '2px 0 0', color: 'var(--text)' }}>{data.name}</h1>
-        </div>
-
-        {/* Balance card */}
-        <div style={{
-          background: 'var(--primary)', borderRadius: 24, padding: 22, marginBottom: 16,
-          position: 'relative', overflow: 'hidden',
-        }}>
-          <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
-          <div style={{ position: 'absolute', bottom: -20, left: 20, width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
-          <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12, margin: '0 0 4px' }}>
-            Balance — {format(new Date(), 'MMMM yyyy')}
-          </p>
-          <p className="amount-font" style={{ color: 'white', fontSize: 34, fontWeight: 600, margin: '0 0 16px' }}>
-            <span style={{ fontSize: 16, fontWeight: 400, opacity: 0.7 }}>TND </span>
-            {balance.toFixed(3)}
-          </p>
-          <div style={{ display: 'flex', gap: 20 }}>
-            <div>
-              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 2px' }}>Income</p>
-              <p className="amount-font" style={{ color: '#A8D5B0', fontSize: 15, fontWeight: 500, margin: 0 }}>+{income.toFixed(3)}</p>
-            </div>
-            <div>
-              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 2px' }}>Spent</p>
-              <p className="amount-font" style={{ color: '#F5A898', fontSize: 15, fontWeight: 500, margin: 0 }}>-{expenses.toFixed(3)}</p>
-            </div>
-            {data.goals[0] && (
-              <div>
-                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 2px' }}>Goal</p>
-                <p className="amount-font" style={{ color: '#D4A373', fontSize: 15, fontWeight: 500, margin: 0 }}>
-                  {Math.round((data.goals[0].savedAmount / data.goals[0].targetAmount) * 100)}%
-                </p>
-              </div>
-            )}
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+          <div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>{greeting} ✦</p>
+            <h1 style={{ fontSize: 22, fontWeight: 600, margin: '2px 0 0' }}>{data.name}</h1>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>All-time balance</p>
+            <p className="amount-font" style={{ fontSize: 16, fontWeight: 600, margin: '2px 0 0', color: allTimeBalance >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+              {allTimeBalance >= 0 ? '+' : ''}{allTimeBalance.toFixed(0)} TND
+            </p>
           </div>
         </div>
 
-        {/* Active goal */}
+        {/* Month nav */}
+        <MonthNav month={month} onChange={setMonth} />
+
+        {/* Balance card */}
+        <div style={{ background: 'var(--primary)', borderRadius: 24, padding: 20, marginBottom: 14, position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }} />
+          <div style={{ position: 'absolute', bottom: -20, left: 20, width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
+          <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12, margin: '0 0 4px' }}>Monthly balance</p>
+          <p className="amount-font" style={{ color: 'white', fontSize: 32, fontWeight: 600, margin: '0 0 14px' }}>
+            <span style={{ fontSize: 15, opacity: 0.7 }}>TND </span>{balance.toFixed(3)}
+          </p>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 2px' }}>Income</p>
+              <p className="amount-font" style={{ color: '#A8D5B0', fontSize: 14, fontWeight: 500, margin: 0 }}>+{income.toFixed(0)}</p>
+            </div>
+            <div>
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 2px' }}>Spent</p>
+              <p className="amount-font" style={{ color: '#F5A898', fontSize: 14, fontWeight: 500, margin: 0 }}>-{expenses.toFixed(0)}</p>
+            </div>
+            <div>
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 2px' }}>Saved</p>
+              <p className="amount-font" style={{ color: '#D4A373', fontSize: 14, fontWeight: 500, margin: 0 }}>{savingsRate}%</p>
+            </div>
+          </div>
+        </div>
+
+        {/* KPI row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+          <div className="card" style={{ padding: '10px 12px' }}>
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: '0 0 4px' }}>Daily avg</p>
+            <p className="amount-font" style={{ fontSize: 15, fontWeight: 600, margin: 0 }}>{dailyAvg.toFixed(0)}</p>
+            <p style={{ fontSize: 9, color: 'var(--text-muted)', margin: '2px 0 0' }}>TND/day</p>
+          </div>
+          <div className="card" style={{ padding: '10px 12px' }}>
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: '0 0 4px' }}>vs last month</p>
+            <p className="amount-font" style={{ fontSize: 15, fontWeight: 600, margin: 0, color: spendChange > 0 ? 'var(--danger)' : spendChange < 0 ? 'var(--success)' : 'var(--text)' }}>
+              {spendChange > 0 ? '+' : ''}{spendChange}%
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 2 }}>
+              {spendChange > 0 ? <TrendingUp size={10} color="var(--danger)" /> : <TrendingDown size={10} color="var(--success)" />}
+              <p style={{ fontSize: 9, color: 'var(--text-muted)', margin: 0 }}>spending</p>
+            </div>
+          </div>
+          <div className="card" style={{ padding: '10px 12px' }}>
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: '0 0 4px' }}>Top spend</p>
+            <p style={{ fontSize: 13, fontWeight: 600, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {topCat ? topCat[0] : '—'}
+            </p>
+            <p className="amount-font" style={{ fontSize: 9, color: 'var(--text-muted)', margin: '2px 0 0' }}>
+              {topCat ? `${topCat[1].toFixed(0)} TND` : 'No data'}
+            </p>
+          </div>
+        </div>
+
+        {/* Budget alerts */}
+        {alerts.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            {alerts.map(a => (
+              <div key={a.category.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: a.pct >= 100 ? 'rgba(196,115,106,0.1)' : 'rgba(212,163,115,0.1)',
+                border: `0.5px solid ${a.pct >= 100 ? 'rgba(196,115,106,0.3)' : 'rgba(212,163,115,0.3)'}`,
+                borderRadius: 12, padding: '10px 14px', marginBottom: 6,
+              }}>
+                <AlertTriangle size={16} color={a.pct >= 100 ? 'var(--danger)' : 'var(--accent)'} />
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 13, fontWeight: 500, margin: 0 }}>
+                    {a.category.icon} {a.category.name}: {a.pct}% of budget used
+                  </p>
+                  <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                    {a.spent.toFixed(0)} / {a.limit.toFixed(0)} TND
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Goals */}
         {data.goals[0] && (
-          <div className="card" style={{ padding: '14px 16px', marginBottom: 16 }}>
+          <div className="card" style={{ padding: '14px 16px', marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Target size={14} color="var(--accent)" />
@@ -89,11 +173,7 @@ export default function Dashboard() {
               </span>
             </div>
             <div style={{ background: 'var(--border)', borderRadius: 99, height: 6 }}>
-              <div style={{
-                background: 'var(--accent)', borderRadius: 99, height: 6,
-                width: `${Math.min(100, (data.goals[0].savedAmount / data.goals[0].targetAmount) * 100)}%`,
-                transition: 'width 0.4s ease',
-              }} />
+              <div style={{ background: 'var(--accent)', borderRadius: 99, height: 6, width: `${Math.min(100, (data.goals[0].savedAmount / data.goals[0].targetAmount) * 100)}%`, transition: 'width 0.4s' }} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
               <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{data.goals[0].savedAmount} TND saved</span>
@@ -102,22 +182,35 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Category breakdown */}
+        {/* Category spending grid */}
         {Object.keys(categorySpend).length > 0 && (
           <>
-            <p style={{ fontSize: 14, fontWeight: 500, margin: '16px 0 10px' }}>This month</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-              {Object.entries(categorySpend).slice(0, 4).map(([cat, amount]) => {
+            <p style={{ fontSize: 14, fontWeight: 500, margin: '14px 0 10px' }}>By category</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+              {Object.entries(categorySpend).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([cat, amount]) => {
                 const catObj = data.categories.find(c => c.name === cat)
+                const pct = catObj?.budgetLimit ? Math.round((amount / catObj.budgetLimit) * 100) : null
                 return (
                   <div key={cat} className="card" style={{ padding: 14 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 10, background: catObj?.color || '#F5F5F5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, marginBottom: 8 }}>
-                      {catObj?.icon || '📦'}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 10, background: catObj?.color || '#F5F5F5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+                        {catObj?.icon || '📦'}
+                      </div>
+                      {pct !== null && (
+                        <span style={{ fontSize: 10, fontWeight: 500, color: pct >= 100 ? 'var(--danger)' : pct >= 70 ? 'var(--accent)' : 'var(--text-muted)' }}>
+                          {pct}%
+                        </span>
+                      )}
                     </div>
-                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '0 0 2px' }}>{cat}</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '8px 0 2px' }}>{cat}</p>
                     <p className="amount-font" style={{ fontSize: 16, fontWeight: 500, margin: 0 }}>
                       {(amount as number).toFixed(0)} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>TND</span>
                     </p>
+                    {catObj?.budgetLimit && (
+                      <div style={{ background: 'var(--border)', borderRadius: 99, height: 3, marginTop: 6 }}>
+                        <div style={{ background: pct! >= 100 ? 'var(--danger)' : 'var(--accent)', borderRadius: 99, height: 3, width: `${Math.min(100, pct!)}%` }} />
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -125,14 +218,36 @@ export default function Dashboard() {
           </>
         )}
 
-        {/* Recent transactions */}
-        <p style={{ fontSize: 14, fontWeight: 500, margin: '16px 0 10px' }}>Recent</p>
+        {/* Daily spending chart */}
+        {expenses > 0 && (
+          <div className="card" style={{ padding: '14px 16px', marginBottom: 14 }}>
+            <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 10px' }}>Daily spending</p>
+            <DailyAreaChart data={dailyData} />
+          </div>
+        )}
+
+        {/* 6 month chart */}
+        <div className="card" style={{ padding: '14px 16px', marginBottom: 14 }}>
+          <p style={{ fontSize: 13, fontWeight: 500, margin: '0 0 10px' }}>6-month overview</p>
+          <MonthlyBarChart data={monthly6} />
+          <div style={{ display: 'flex', gap: 16, marginTop: 8, justifyContent: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 10, height: 10, borderRadius: 2, background: '#A8D5B0' }} />
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Income</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 10, height: 10, borderRadius: 2, background: '#F5A898' }} />
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Expenses</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent */}
+        <p style={{ fontSize: 14, fontWeight: 500, margin: '14px 0 10px' }}>Recent</p>
         {recentTx.length === 0 ? (
           <div className="card" style={{ padding: 24, textAlign: 'center' }}>
             <p style={{ fontSize: 28, margin: '0 0 8px' }}>🌱</p>
-            <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>
-              No transactions yet.<br />Say something or tap + to start!
-            </p>
+            <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>No transactions yet.<br />Say something or tap + to start!</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -140,9 +255,7 @@ export default function Dashboard() {
               const catObj = data.categories.find(c => c.name === tx.category)
               return (
                 <div key={tx.id} className="card" style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 12, flexShrink: 0, background: catObj?.color || '#F5F5F5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
-                    {catObj?.icon || '📦'}
-                  </div>
+                  <div style={{ width: 38, height: 38, borderRadius: 12, flexShrink: 0, background: catObj?.color || '#F5F5F5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>{catObj?.icon || '📦'}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 13, fontWeight: 500, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tx.description}</p>
                     <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 0' }}>{tx.category} · {format(new Date(tx.date), 'dd MMM')}</p>
@@ -156,28 +269,28 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Voice button */}
-        <div style={{ margin: '24px 0 16px', display: 'flex', justifyContent: 'center' }}>
+        {/* Voice */}
+        <div style={{ margin: '20px 0 16px', display: 'flex', justifyContent: 'center' }}>
           <VoiceButton categories={data.categories} onTransaction={handleVoice} />
         </div>
       </div>
 
       {/* FAB */}
-      <button
-        onClick={() => setShowAdd(true)}
-        style={{
-          position: 'fixed',
-          bottom: 'calc(80px + env(safe-area-inset-bottom) + 16px)',
-          right: 20, width: 52, height: 52, borderRadius: '50%',
-          background: 'var(--accent)', border: 'none', color: 'white',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 4px 16px rgba(212,163,115,0.4)', zIndex: 40, fontSize: 24,
-        }}
-      >
-        +
-      </button>
+      <button onClick={() => setShowAdd(true)} style={{
+        position: 'fixed', bottom: 'calc(80px + env(safe-area-inset-bottom) + 16px)', right: 20,
+        width: 52, height: 52, borderRadius: '50%', background: 'var(--accent)', border: 'none', color: 'white',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 4px 16px rgba(212,163,115,0.4)', zIndex: 40, fontSize: 24,
+      }}>+</button>
 
       {showAdd && <AddTransactionModal categories={data.categories} onAdd={handleAdd} onClose={() => setShowAdd(false)} />}
+      {showRecurring && data.recurring.filter(r => r.active).length > 0 && (
+        <RecurringModal
+          recurring={data.recurring}
+          onApply={handleApplyRecurring}
+          onSkip={() => { const d = { ...data, lastRecurringCheck: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}` }; saveData(d); setData(d); setShowRecurring(false) }}
+        />
+      )}
       <div className="safe-bottom" />
       <BottomNav />
     </div>
