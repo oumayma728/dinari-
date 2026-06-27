@@ -15,6 +15,8 @@ export default function Home() {
   const [cTarget, setCTarget] = useState('')
   const [editingChallenge, setEditingChallenge] = useState<string | null>(null)
   const [editSaved, setEditSaved] = useState('')
+  const [editingBalance, setEditingBalance] = useState(false)
+  const [balanceInput, setBalanceInput] = useState('')
 
   useEffect(() => { setData(loadData()) }, [])
 
@@ -80,12 +82,53 @@ export default function Home() {
             </button>
           </div>
 
-          {/* Balance */}
+          {/* Balance — tap to edit */}
           <div style={{ marginBottom: 20 }}>
-            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', margin: '0 0 4px' }}>Balance</p>
-            <p className="num" style={{ color: 'white', fontSize: 38, fontWeight: 700, margin: 0, letterSpacing: '-1.5px', lineHeight: 1 }}>
-              {data.balance.toFixed(0)}<span style={{ fontSize: 16, fontWeight: 500, opacity: 0.5, marginLeft: 6 }}>TND</span>
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: 600, letterSpacing: '0.4px', textTransform: 'uppercase', margin: 0 }}>Balance</p>
+              <button
+                onClick={() => { setBalanceInput(String(data.balance || '')); setEditingBalance(true) }}
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, padding: '2px 7px', color: 'rgba(255,255,255,0.45)', fontSize: 10, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.3px' }}
+              >
+                EDIT
+              </button>
+            </div>
+            {editingBalance ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <input
+                  type="number" inputMode="decimal" value={balanceInput}
+                  onChange={e => setBalanceInput(e.target.value)}
+                  onBlur={() => {
+                    const v = parseFloat(balanceInput)
+                    if (!isNaN(v)) persist({ ...data, balance: v })
+                    setEditingBalance(false)
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      const v = parseFloat(balanceInput)
+                      if (!isNaN(v)) persist({ ...data, balance: v })
+                      setEditingBalance(false)
+                    }
+                    if (e.key === 'Escape') setEditingBalance(false)
+                  }}
+                  autoFocus
+                  style={{
+                    background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.25)',
+                    borderRadius: 12, color: 'white', fontSize: 32, fontWeight: 700,
+                    letterSpacing: '-1px', padding: '4px 12px', outline: 'none', width: 180,
+                  }}
+                />
+                <span style={{ fontSize: 15, fontWeight: 500, color: 'rgba(255,255,255,0.4)' }}>TND</span>
+              </div>
+            ) : (
+              <p
+                className="num"
+                onClick={() => { setBalanceInput(String(data.balance || '')); setEditingBalance(true) }}
+                style={{ color: 'white', fontSize: 38, fontWeight: 700, margin: 0, letterSpacing: '-1.5px', lineHeight: 1, cursor: 'pointer' }}
+              >
+                {data.balance.toFixed(0)}<span style={{ fontSize: 16, fontWeight: 500, opacity: 0.5, marginLeft: 6 }}>TND</span>
+              </p>
+            )}
           </div>
 
           {/* Planned vs Actual */}
