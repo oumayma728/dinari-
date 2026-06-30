@@ -50,7 +50,7 @@ export function calcStats(data: AppData) {
 
   const challengeReserved = data.challenges
     .filter(c => c.active)
-    .reduce((s, c) => s + c.targetAmount, 0)
+    .reduce((s, c) => s + c.savedAmount, 0)
 
   const plannedRemaining = balance - tickedBudget - challengeReserved
 

@@ -7,6 +7,15 @@ import BottomNav from '@/components/BottomNav'
 
 interface Msg { role: 'user' | 'assistant'; content: string }
 
+const CHAT_KEY = 'dinari_chat'
+
+function loadMsgs(): Msg[] {
+  try { return JSON.parse(localStorage.getItem(CHAT_KEY) || '[]') } catch { return [] }
+}
+function saveMsgs(msgs: Msg[]) {
+  localStorage.setItem(CHAT_KEY, JSON.stringify(msgs))
+}
+
 const SUGGESTIONS = [
   "How am I doing this month?",
   "Where am I spending the most?",
@@ -25,8 +34,8 @@ export default function AIPage() {
   const transcriptRef = useRef('')
   const recogRef = useRef<SpeechRecognition | null>(null)
 
-  useEffect(() => { setData(loadData()) }, [])
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs])
+  useEffect(() => { setData(loadData()); setMsgs(loadMsgs()) }, [])
+  useEffect(() => { if (msgs.length > 0) saveMsgs(msgs); endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs])
 
   const buildContext = (d: AppData) => {
     const stats = calcStats(d)
@@ -120,7 +129,7 @@ export default function AIPage() {
           </p>
         </div>
         {msgs.length > 0 && (
-          <button onClick={() => setMsgs([])} style={{ background: 'none', border: 'none', padding: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--faint)', fontSize: 12, fontWeight: 500 }}>
+          <button onClick={() => { setMsgs([]); localStorage.removeItem(CHAT_KEY) }} style={{ background: 'none', border: 'none', padding: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--faint)', fontSize: 12, fontWeight: 500 }}>
             <Trash2 size={14} /> Clear
           </button>
         )}
