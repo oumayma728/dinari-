@@ -23,9 +23,11 @@ export interface Transaction {
 export interface Challenge {
   id: string
   name: string
+  icon?: string
   targetAmount: number
   savedAmount: number
   active: boolean
+  deadline?: string  // YYYY-MM
 }
 
 export interface WishlistItem {
@@ -49,4 +51,6 @@ export interface AppData {
   transactions: Transaction[]
   challenges: Challenge[]
   wishlistGroups: WishlistGroup[]
+  streak: number
+  lastTrackedDate?: string  // YYYY-MM-DD
 }

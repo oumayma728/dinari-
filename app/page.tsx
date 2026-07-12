@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { Plus, Check, Pencil, Trash2 } from 'lucide-react'
-import { loadData, saveData, calcStats, getCategorySpent, isThisMonth } from '@/lib/storage'
+import { loadData, saveData, calcStats, getCategorySpent, isThisMonth, updateStreak } from '@/lib/storage'
 import { AppData, Challenge } from '@/lib/types'
 import BottomNav from '@/components/BottomNav'
 import AddTransactionModal from '@/components/AddTransactionModal'
@@ -12,7 +12,9 @@ export default function Home() {
   const [showAdd, setShowAdd] = useState(false)
   const [showChallengeForm, setShowChallengeForm] = useState(false)
   const [cName, setCName] = useState('')
+  const [cIcon, setCIcon] = useState('')
   const [cTarget, setCTarget] = useState('')
+  const [cDeadline, setCDeadline] = useState('')
   const [editingChallenge, setEditingChallenge] = useState<string | null>(null)
   const [editSaved, setEditSaved] = useState('')
   const [editingSalary, setEditingSalary] = useState(false)
@@ -30,9 +32,23 @@ export default function Home() {
 
   const addChallenge = () => {
     if (!cName.trim() || !cTarget) return
-    const c: Challenge = { id: crypto.randomUUID(), name: cName.trim(), targetAmount: parseFloat(cTarget), savedAmount: 0, active: true }
+    const c: Challenge = {
+      id: crypto.randomUUID(),
+      name: cName.trim(),
+      icon: cIcon.trim() || '🎯',
+      targetAmount: parseFloat(cTarget),
+      savedAmount: 0,
+      active: true,
+      deadline: cDeadline || undefined,
+    }
     persist({ ...data, challenges: [...data.challenges, c] })
-    setCName(''); setCTarget(''); setShowChallengeForm(false)
+    setCName(''); setCIcon(''); setCTarget(''); setCDeadline(''); setShowChallengeForm(false)
+  }
+
+  const monthsLeft = (deadline: string) => {
+    const [y, m] = deadline.split('-').map(Number)
+    const now = new Date()
+    return (y - now.getFullYear()) * 12 + (m - (now.getMonth() + 1))
   }
 
   const toggleChallenge = (id: string) =>
@@ -76,6 +92,13 @@ export default function Home() {
               </p>
               <p style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: 500, margin: 0 }}>{data.name}</p>
             </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {data.streak > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 20, padding: '5px 10px' }}>
+                  <span style={{ fontSize: 14 }}>🔥</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'white' }}>{data.streak} day{data.streak > 1 ? 's' : ''}</span>
+                </div>
+              )}
             <button onClick={() => setShowAdd(true)} style={{
               width: 36, height: 36, borderRadius: '50%', background: 'rgba(196,96,122,0.25)',
               border: 'none', color: 'var(--pink)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
@@ -250,61 +273,116 @@ export default function Home() {
 
         {showChallengeForm && (
           <div className="card" style={{ padding: '14px', marginBottom: 10 }}>
-            <input value={cName} onChange={e => setCName(e.target.value)} placeholder="Challenge name (e.g. Save 100 TND this month)"
-              className="field" style={{ marginBottom: 8 }} autoFocus />
-            <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg)', borderRadius: 12, padding: '0 14px', marginBottom: 10 }}>
-              <input type="number" inputMode="decimal" value={cTarget} onChange={e => setCTarget(e.target.value)} placeholder="Target amount"
-                style={{ flex: 1, border: 'none', outline: 'none', background: 'none', fontSize: 16, fontWeight: 600, padding: '12px 0' }} />
-              <span style={{ fontSize: 12, color: 'var(--faint)', fontWeight: 700 }}>TND</span>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <input value={cIcon} onChange={e => setCIcon(e.target.value)} placeholder="🎯"
+                style={{ width: 46, border: 'none', outline: 'none', background: 'var(--bg)', borderRadius: 10, padding: '10px 0', fontSize: 20, textAlign: 'center' }} />
+              <input value={cName} onChange={e => setCName(e.target.value)} placeholder="Goal name (e.g. New Laptop)"
+                className="field" style={{ flex: 1, marginBottom: 0 }} autoFocus />
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: 'var(--bg)', borderRadius: 12, padding: '0 14px' }}>
+                <input type="number" inputMode="decimal" value={cTarget} onChange={e => setCTarget(e.target.value)} placeholder="Target amount"
+                  style={{ flex: 1, border: 'none', outline: 'none', background: 'none', fontSize: 15, fontWeight: 600, padding: '11px 0' }} />
+                <span style={{ fontSize: 11, color: 'var(--faint)', fontWeight: 700 }}>TND</span>
+              </div>
+              <input type="month" value={cDeadline} onChange={e => setCDeadline(e.target.value)}
+                style={{ flex: 1, border: 'none', outline: 'none', background: 'var(--bg)', borderRadius: 12, padding: '11px 14px', fontSize: 13, color: cDeadline ? 'var(--text)' : 'var(--faint)', fontWeight: 500 }} />
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => setShowChallengeForm(false)} className="btn-ghost" style={{ flex: 1 }}>Cancel</button>
-              <button onClick={addChallenge} className="btn-pink" style={{ flex: 2 }} disabled={!cName.trim() || !cTarget}>Add</button>
+              <button onClick={() => { setShowChallengeForm(false); setCName(''); setCIcon(''); setCTarget(''); setCDeadline('') }} className="btn-ghost" style={{ flex: 1 }}>Cancel</button>
+              <button onClick={addChallenge} className="btn-pink" style={{ flex: 2 }} disabled={!cName.trim() || !cTarget}>Add goal</button>
             </div>
           </div>
         )}
 
         {data.challenges.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 4 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 4 }}>
             {data.challenges.map(c => {
               const pct = c.targetAmount > 0 ? Math.min(100, Math.round((c.savedAmount / c.targetAmount) * 100)) : 0
               const done = pct >= 100
               const isEditing = editingChallenge === c.id
+              const ml = c.deadline ? monthsLeft(c.deadline) : null
+              const remaining = c.targetAmount - c.savedAmount
+              const monthly = ml && ml > 0 ? remaining / ml : null
+              const weekly = monthly ? monthly / 4.33 : null
+              const circ = 2 * Math.PI * 18
+
               return (
-                <div key={c.id} className="card" style={{ padding: '14px 16px', opacity: c.active ? 1 : 0.5 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: done ? 0 : 10 }}>
-                    {/* Tick */}
-                    <button onClick={() => toggleChallenge(c.id)} style={{
-                      width: 24, height: 24, borderRadius: '50%', flexShrink: 0, cursor: 'pointer', border: 'none',
-                      background: c.active ? (done ? 'var(--success)' : 'var(--pink)') : 'var(--bg)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      {c.active && <Check size={13} color="white" strokeWidth={3} />}
-                    </button>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: 14, fontWeight: 600, margin: 0, letterSpacing: '-0.2px' }}>{c.name}</p>
-                      <p className="num" style={{ fontSize: 12, color: 'var(--muted)', margin: '1px 0 0' }}>
-                        {c.savedAmount.toFixed(0)} / {c.targetAmount.toFixed(0)} TND · {pct}%
-                      </p>
+                <div key={c.id} className="card" style={{ padding: '16px', opacity: c.active ? 1 : 0.55 }}>
+                  <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                    {/* SVG progress circle */}
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <svg width={52} height={52}>
+                        <circle cx={26} cy={26} r={18} fill="none" stroke="var(--bg)" strokeWidth={4.5} />
+                        <circle cx={26} cy={26} r={18} fill="none"
+                          stroke={done ? 'var(--success)' : 'var(--pink)'}
+                          strokeWidth={4.5} strokeLinecap="round"
+                          strokeDasharray={circ}
+                          strokeDashoffset={circ * (1 - pct / 100)}
+                          style={{ transform: 'rotate(-90deg)', transformOrigin: '26px 26px', transition: 'stroke-dashoffset 0.5s' }}
+                        />
+                        <text x={26} y={30} textAnchor="middle" fontSize={9} fontWeight={700}
+                          fill={done ? 'var(--success)' : 'var(--text)'}>
+                          {pct}%
+                        </text>
+                      </svg>
+                      {/* icon badge */}
+                      <span style={{ position: 'absolute', bottom: -2, right: -2, fontSize: 14, lineHeight: 1 }}>
+                        {c.icon || '🎯'}
+                      </span>
                     </div>
-                    <button onClick={() => { setEditingChallenge(isEditing ? null : c.id); setEditSaved(String(c.savedAmount)) }}
-                      style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}>
-                      <Pencil size={14} color="var(--faint)" />
-                    </button>
-                    <button onClick={() => deleteChallenge(c.id)} style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}>
-                      <Trash2 size={14} color="var(--faint)" />
-                    </button>
+
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
+                        <p style={{ fontSize: 14, fontWeight: 700, margin: 0, letterSpacing: '-0.3px', lineHeight: 1.2 }}>{c.name}</p>
+                        <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                          <button onClick={() => { setEditingChallenge(isEditing ? null : c.id); setEditSaved(String(c.savedAmount)) }}
+                            style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}>
+                            <Pencil size={13} color="var(--faint)" />
+                          </button>
+                          <button onClick={() => deleteChallenge(c.id)} style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer' }}>
+                            <Trash2 size={13} color="var(--faint)" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="num" style={{ fontSize: 12, color: 'var(--muted)', margin: '3px 0 0' }}>
+                        {c.savedAmount.toFixed(0)} / {c.targetAmount.toFixed(0)} TND
+                      </p>
+
+                      {/* deadline + monthly breakdown */}
+                      {!done && (ml !== null || monthly) && (
+                        <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                          {ml !== null && ml >= 0 && (
+                            <span style={{ fontSize: 11, fontWeight: 600, color: ml <= 2 ? 'var(--pink)' : 'var(--muted)', background: 'var(--bg)', borderRadius: 6, padding: '2px 7px' }}>
+                              {ml === 0 ? 'This month' : `${ml} month${ml > 1 ? 's' : ''} left`}
+                            </span>
+                          )}
+                          {monthly !== null && (
+                            <span className="num" style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', background: 'var(--bg)', borderRadius: 6, padding: '2px 7px' }}>
+                              {monthly.toFixed(0)} TND/mo · {weekly!.toFixed(0)} TND/wk
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {done && (
+                        <p style={{ fontSize: 12, color: 'var(--success)', fontWeight: 700, margin: '4px 0 0' }}>✓ Goal reached!</p>
+                      )}
+                    </div>
                   </div>
 
+                  {/* Progress bar */}
                   {!done && (
-                    <div style={{ background: 'var(--bg)', borderRadius: 99, height: 5 }}>
-                      <div style={{ background: done ? 'var(--success)' : 'var(--pink)', borderRadius: 99, height: 5, width: `${pct}%`, transition: 'width 0.4s' }} />
+                    <div style={{ background: 'var(--bg)', borderRadius: 99, height: 4, marginTop: 12 }}>
+                      <div style={{ background: 'var(--pink)', borderRadius: 99, height: 4, width: `${pct}%`, transition: 'width 0.5s' }} />
                     </div>
                   )}
-                  {done && <p style={{ fontSize: 12, color: 'var(--success)', fontWeight: 700, margin: '6px 0 0' }}>✓ Challenge complete!</p>}
 
+                  {/* Edit saved amount */}
                   {isEditing && (
-                    <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                       <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: 'var(--bg)', borderRadius: 10, padding: '0 12px' }}>
                         <input type="number" inputMode="decimal" value={editSaved} onChange={e => setEditSaved(e.target.value)}
                           placeholder="Saved so far" style={{ flex: 1, border: 'none', outline: 'none', background: 'none', fontSize: 14, padding: '10px 0' }} autoFocus />
@@ -312,7 +390,7 @@ export default function Home() {
                       </div>
                       <button onClick={() => { updateSaved(c.id, parseFloat(editSaved) || 0); setEditingChallenge(null) }}
                         style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: 'var(--pink)', color: 'white', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-                        Save
+                        Update
                       </button>
                     </div>
                   )}
@@ -332,7 +410,7 @@ export default function Home() {
       {showAdd && (
         <AddTransactionModal
           categories={data.categories}
-          onAdd={tx => { persist({ ...data, transactions: [{ ...tx, id: crypto.randomUUID(), createdAt: new Date().toISOString() }, ...data.transactions] }) }}
+          onAdd={tx => { const next = updateStreak({ ...data, transactions: [{ ...tx, id: crypto.randomUUID(), createdAt: new Date().toISOString() }, ...data.transactions] }); persist(next) }}
           onClose={() => setShowAdd(false)}
         />
       )}

@@ -11,6 +11,7 @@ const defaults: AppData = {
   transactions: [],
   challenges: [],
   wishlistGroups: [],
+  streak: 0,
 }
 
 export function loadData(): AppData {
@@ -65,6 +66,14 @@ export function calcStats(data: AppData) {
   const actualRemaining = balance + monthIncome - monthExpenses
 
   return { balance, plannedRemaining, actualRemaining, tickedBudget, challengeReserved, monthExpenses, monthIncome }
+}
+
+export function updateStreak(data: AppData): AppData {
+  const today = new Date().toISOString().slice(0, 10)
+  if (data.lastTrackedDate === today) return data
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  const streak = data.lastTrackedDate === yesterday ? (data.streak || 0) + 1 : 1
+  return { ...data, streak, lastTrackedDate: today }
 }
 
 export function getCategorySpent(data: AppData, categoryId: string): number {

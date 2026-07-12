@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import { loadData, saveData } from '@/lib/storage'
-import { AppData, WishlistGroup, WishlistItem } from '@/lib/types'
+import { AppData, Challenge, WishlistGroup, WishlistItem } from '@/lib/types'
 import BottomNav from '@/components/BottomNav'
 
 export default function WishlistPage() {
@@ -13,6 +13,7 @@ export default function WishlistPage() {
   const [addingItemTo, setAddingItemTo] = useState<string | null>(null)
   const [newItemName, setNewItemName] = useState('')
   const [newItemPrice, setNewItemPrice] = useState('')
+  const [goalCreated, setGoalCreated] = useState<string | null>(null)
   const itemInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { setData(loadData()) }, [])
@@ -51,6 +52,14 @@ export default function WishlistPage() {
   const toggleGroup = (id: string) =>
     setExpandedGroups(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
 
+  const convertToGoal = (item: WishlistItem) => {
+    if (!data || !item.price) return
+    const goal: Challenge = { id: crypto.randomUUID(), name: item.name, icon: '🎯', targetAmount: item.price, savedAmount: 0, active: true }
+    persist({ ...data, challenges: [...data.challenges, goal] })
+    setGoalCreated(item.id)
+    setTimeout(() => setGoalCreated(null), 2000)
+  }
+
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
       <div style={{ padding: 'calc(24px + env(safe-area-inset-top)) 20px 0' }}>
@@ -58,7 +67,7 @@ export default function WishlistPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
           <div>
             <h1 style={{ fontSize: 26, fontWeight: 700, margin: '0 0 3px', letterSpacing: '-0.7px' }}>Wishlist</h1>
-            <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0, fontWeight: 500 }}>Tap item to tick when bought</p>
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0, fontWeight: 500 }}>Tap 🎯 to turn an item into a saving goal</p>
           </div>
           <button onClick={() => setShowGroupForm(s => !s)} style={{
             display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px',
@@ -125,7 +134,6 @@ export default function WishlistPage() {
                     {/* Pending items */}
                     {pending.map(item => (
                       <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '0.5px solid var(--border)' }}>
-                        {/* Checkbox */}
                         <button onClick={() => toggleItem(group.id, item.id)} style={{
                           width: 22, height: 22, borderRadius: 6, border: '1.5px solid var(--border)', background: 'none', cursor: 'pointer', flexShrink: 0,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -135,6 +143,16 @@ export default function WishlistPage() {
                           <p className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--pink)', margin: 0, flexShrink: 0 }}>
                             {item.price.toFixed(0)} TND
                           </p>
+                        )}
+                        {item.price && (
+                          <button onClick={() => convertToGoal(item)} title="Convert to saving goal" style={{
+                            background: goalCreated === item.id ? 'var(--success)' : 'var(--pink-light)',
+                            border: 'none', borderRadius: 7, padding: '4px 8px', cursor: 'pointer', flexShrink: 0,
+                            fontSize: 11, fontWeight: 700, color: goalCreated === item.id ? 'white' : 'var(--pink)',
+                            transition: 'all 0.2s',
+                          }}>
+                            {goalCreated === item.id ? '✓ Added' : '🎯 Goal'}
+                          </button>
                         )}
                         <button onClick={() => deleteItem(group.id, item.id)} style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', flexShrink: 0 }}>
                           <Trash2 size={13} color="var(--faint)" />
