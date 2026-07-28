@@ -10,6 +10,14 @@ export interface Category {
   activeThisMonth: boolean
 }
 
+export interface IncomeSource {
+  id: string
+  name: string       // e.g. "Salary", "CIVP"
+  amount: number
+  day: number        // expected day of month, 1-31
+  received: boolean  // true once it's actually landed this month
+}
+
 export interface Transaction {
   id: string
   type: 'income' | 'expense'
@@ -27,7 +35,9 @@ export interface Challenge {
   targetAmount: number
   savedAmount: number
   active: boolean
-  deadline?: string  // YYYY-MM
+  deadline?: string            // YYYY-MM
+  isEssential?: boolean        // counted toward safe-to-spend reserve
+  monthlyContribution?: number // suggested amount to stuff per month
 }
 
 export interface WishlistItem {
@@ -45,12 +55,15 @@ export interface WishlistGroup {
 
 export interface AppData {
   name: string
-  salary: number
-  carryover: number       // extra leftover from last month
+  incomeSources: IncomeSource[]
+  carryover: number
   categories: Category[]
   transactions: Transaction[]
   challenges: Challenge[]
   wishlistGroups: WishlistGroup[]
   streak: number
-  lastTrackedDate?: string  // YYYY-MM-DD
+  lastTrackedDate?: string      // YYYY-MM-DD
+  safeStreak: number
+  lastSafeMonthChecked?: string // YYYY-MM
+  themeColor?: string
 }

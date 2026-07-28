@@ -1,14 +1,16 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, ArrowLeftRight, Tag, Sparkles, Heart } from 'lucide-react'
+import { Home, Mail, ArrowLeftRight, Tag, Sparkles, Heart, Settings } from 'lucide-react'
 
 const tabs = [
   { href: '/',             icon: Home,           label: 'Home' },
-  { href: '/transactions', icon: ArrowLeftRight,  label: 'Transactions' },
-  { href: '/categories',   icon: Tag,             label: 'Categories' },
-  { href: '/voice',        icon: Sparkles,        label: 'AI' },
-  { href: '/wishlist',     icon: Heart,           label: 'Wishlist' },
+  { href: '/envelopes',    icon: Mail,           label: 'Envelopes' },
+  { href: '/transactions', icon: ArrowLeftRight, label: 'Flows' },
+  { href: '/categories',   icon: Tag,            label: 'Budget' },
+  { href: '/voice',        icon: Sparkles,       label: 'AI' },
+  { href: '/wishlist',     icon: Heart,          label: 'Wishlist' },
+  { href: '/settings',     icon: Settings,       label: 'Settings' },
 ]
 
 export default function BottomNav() {
@@ -31,13 +33,13 @@ export default function BottomNav() {
             <Link key={href} href={href} style={{ flex: 1, textDecoration: 'none' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '4px 0' }}>
                 <div style={{
-                  width: 38, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 32, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
                   borderRadius: 8,
                   background: active ? 'var(--pink-light)' : 'transparent',
                 }}>
-                  <Icon size={19} strokeWidth={active ? 2.2 : 1.6} color={active ? 'var(--pink)' : 'var(--faint)'} />
+                  <Icon size={16} strokeWidth={active ? 2.2 : 1.6} color={active ? 'var(--pink)' : 'var(--faint)'} />
                 </div>
-                <span style={{ fontSize: 9, fontWeight: active ? 700 : 400, color: active ? 'var(--pink)' : 'var(--faint)', letterSpacing: '0.2px' }}>
+                <span style={{ fontSize: 7, fontWeight: active ? 700 : 400, color: active ? 'var(--pink)' : 'var(--faint)', letterSpacing: '0.1px' }}>
                   {label}
                 </span>
               </div>

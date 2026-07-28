@@ -39,9 +39,13 @@ export default function AIPage() {
 
   const buildContext = (d: AppData) => {
     const stats = calcStats(d)
+    const receivedIncome = d.incomeSources.filter(s => s.received).reduce((sum, s) => sum + s.amount, 0)
+    const pendingIncome = d.incomeSources.filter(s => !s.received).reduce((sum, s) => sum + s.amount, 0)
     return {
       name: d.name,
-      salary: d.salary,
+      incomeSources: d.incomeSources.map(s => ({ name: s.name, amount: s.amount, received: s.received, day: s.day })),
+      receivedIncome,
+      pendingIncome,
       carryover: d.carryover,
       totalBalance: stats.balance,
       plannedRemaining: stats.plannedRemaining,

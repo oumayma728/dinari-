@@ -1,9 +1,11 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
-import { loadData, saveData } from '@/lib/storage'
+import { loadData, saveData, canAfford } from '@/lib/storage'
 import { AppData, Challenge, WishlistGroup, WishlistItem } from '@/lib/types'
 import BottomNav from '@/components/BottomNav'
+
+interface AffordResult { affordable: boolean; after: number; tight: boolean }
 
 export default function WishlistPage() {
   const [data, setData] = useState<AppData | null>(null)
@@ -14,6 +16,7 @@ export default function WishlistPage() {
   const [newItemName, setNewItemName] = useState('')
   const [newItemPrice, setNewItemPrice] = useState('')
   const [goalCreated, setGoalCreated] = useState<string | null>(null)
+  const [affordResults, setAffordResults] = useState<Record<string, AffordResult | null>>({})
   const itemInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { setData(loadData()) }, [])
@@ -60,6 +63,15 @@ export default function WishlistPage() {
     setTimeout(() => setGoalCreated(null), 2000)
   }
 
+  const checkAfford = (item: WishlistItem) => {
+    if (!data || !item.price) return
+    if (affordResults[item.id] !== undefined) {
+      setAffordResults(prev => { const n = { ...prev }; delete n[item.id]; return n })
+      return
+    }
+    setAffordResults(prev => ({ ...prev, [item.id]: canAfford(data, item.price!) }))
+  }
+
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
       <div style={{ padding: 'calc(24px + env(safe-area-inset-top)) 20px 0' }}>
@@ -67,7 +79,7 @@ export default function WishlistPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22 }}>
           <div>
             <h1 style={{ fontSize: 26, fontWeight: 700, margin: '0 0 3px', letterSpacing: '-0.7px' }}>Wishlist</h1>
-            <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0, fontWeight: 500 }}>Tap 🎯 to turn an item into a saving goal</p>
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0, fontWeight: 500 }}>🎯 goal · 💡 afford check</p>
           </div>
           <button onClick={() => setShowGroupForm(s => !s)} style={{
             display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px',
@@ -79,12 +91,11 @@ export default function WishlistPage() {
           </button>
         </div>
 
-        {/* Add group form */}
         {showGroupForm && (
           <div className="card" style={{ padding: '14px', marginBottom: 14 }}>
             <input ref={itemInputRef} value={newGroupTitle} onChange={e => setNewGroupTitle(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addGroup()}
-              placeholder="Group name (e.g. Body Care, Tech, Clothes)" autoFocus
+              placeholder="Group name (e.g. Tech, Travel, Home)" autoFocus
               className="field" style={{ marginBottom: 10 }} />
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setShowGroupForm(false)} className="btn-ghost" style={{ flex: 1 }}>Cancel</button>
@@ -93,12 +104,11 @@ export default function WishlistPage() {
           </div>
         )}
 
-        {/* Groups */}
         {data.wishlistGroups.length === 0 && !showGroupForm && (
           <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--faint)' }}>
             <p style={{ fontSize: 32, margin: '0 0 10px' }}>✨</p>
             <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)', margin: '0 0 6px', letterSpacing: '-0.3px' }}>Nothing yet</p>
-            <p style={{ fontSize: 13, margin: 0 }}>Create a group like "Body Care" or "Tech"<br />then add items inside</p>
+            <p style={{ fontSize: 13, margin: 0 }}>Create a group like "Tech" or "Travel"<br />then add items inside</p>
           </div>
         )}
 
@@ -111,11 +121,8 @@ export default function WishlistPage() {
 
             return (
               <div key={group.id} className="card" style={{ overflow: 'hidden' }}>
-                {/* Group header */}
-                <div
-                  onClick={() => toggleGroup(group.id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '15px 16px', cursor: 'pointer' }}
-                >
+                <div onClick={() => toggleGroup(group.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '15px 16px', cursor: 'pointer' }}>
                   <div style={{ flex: 1 }}>
                     <p style={{ fontSize: 15, fontWeight: 700, margin: 0, letterSpacing: '-0.3px' }}>{group.title}</p>
                     <p style={{ fontSize: 12, color: 'var(--faint)', margin: '2px 0 0', fontWeight: 500 }}>
@@ -131,40 +138,75 @@ export default function WishlistPage() {
                 {isOpen && (
                   <div style={{ borderTop: '0.5px solid var(--border)' }}>
 
-                    {/* Pending items */}
-                    {pending.map(item => (
-                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '0.5px solid var(--border)' }}>
-                        <button onClick={() => toggleItem(group.id, item.id)} style={{
-                          width: 22, height: 22, borderRadius: 6, border: '1.5px solid var(--border)', background: 'none', cursor: 'pointer', flexShrink: 0,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }} />
-                        <p style={{ flex: 1, fontSize: 14, fontWeight: 500, margin: 0 }}>{item.name}</p>
-                        {item.price && (
-                          <p className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--pink)', margin: 0, flexShrink: 0 }}>
-                            {item.price.toFixed(0)} TND
-                          </p>
-                        )}
-                        {item.price && (
-                          <button onClick={() => convertToGoal(item)} title="Convert to saving goal" style={{
-                            background: goalCreated === item.id ? 'var(--success)' : 'var(--pink-light)',
-                            border: 'none', borderRadius: 7, padding: '4px 8px', cursor: 'pointer', flexShrink: 0,
-                            fontSize: 11, fontWeight: 700, color: goalCreated === item.id ? 'white' : 'var(--pink)',
-                            transition: 'all 0.2s',
-                          }}>
-                            {goalCreated === item.id ? '✓ Added' : '🎯 Goal'}
-                          </button>
-                        )}
-                        <button onClick={() => deleteItem(group.id, item.id)} style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', flexShrink: 0 }}>
-                          <Trash2 size={13} color="var(--faint)" />
-                        </button>
-                      </div>
-                    ))}
+                    {pending.map(item => {
+                      const afford = affordResults[item.id]
+                      return (
+                        <div key={item.id}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '0.5px solid var(--border)' }}>
+                            <button onClick={() => toggleItem(group.id, item.id)} style={{
+                              width: 22, height: 22, borderRadius: 6, border: '1.5px solid var(--border)', background: 'none', cursor: 'pointer', flexShrink: 0,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            }} />
+                            <p style={{ flex: 1, fontSize: 14, fontWeight: 500, margin: 0 }}>{item.name}</p>
+                            {item.price && (
+                              <p className="num" style={{ fontSize: 13, fontWeight: 700, color: 'var(--pink)', margin: 0, flexShrink: 0 }}>
+                                {item.price.toFixed(0)} TND
+                              </p>
+                            )}
+                            {item.price && (
+                              <button onClick={() => checkAfford(item)} title="Can I afford this?"
+                                style={{
+                                  background: afford !== undefined ? (afford === null ? 'var(--bg)' : afford.affordable ? (afford.tight ? '#FDF3E5' : 'var(--success-bg)') : 'var(--pink-light)') : 'var(--bg)',
+                                  border: 'none', borderRadius: 7, padding: '4px 7px', cursor: 'pointer', flexShrink: 0,
+                                  fontSize: 12, transition: 'all 0.15s',
+                                }}>
+                                💡
+                              </button>
+                            )}
+                            {item.price && (
+                              <button onClick={() => convertToGoal(item)} title="Convert to saving goal"
+                                style={{
+                                  background: goalCreated === item.id ? '#7EC8A0' : 'var(--pink-light)',
+                                  border: 'none', borderRadius: 7, padding: '4px 7px', cursor: 'pointer', flexShrink: 0,
+                                  fontSize: 11, fontWeight: 700,
+                                  color: goalCreated === item.id ? 'white' : 'var(--pink)',
+                                  transition: 'all 0.2s',
+                                }}>
+                                {goalCreated === item.id ? '✓' : '🎯'}
+                              </button>
+                            )}
+                            <button onClick={() => deleteItem(group.id, item.id)} style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', flexShrink: 0 }}>
+                              <Trash2 size={13} color="var(--faint)" />
+                            </button>
+                          </div>
 
-                    {/* Bought items */}
+                          {/* Afford result */}
+                          {afford !== undefined && afford !== null && (
+                            <div style={{
+                              padding: '8px 16px 10px',
+                              borderBottom: '0.5px solid var(--border)',
+                              background: afford.affordable
+                                ? (afford.tight ? 'var(--warning-bg)' : 'var(--success-bg)')
+                                : 'var(--pink-faint)',
+                            }}>
+                              <p style={{
+                                fontSize: 12, fontWeight: 600, margin: 0,
+                                color: afford.affordable ? (afford.tight ? 'var(--warning)' : 'var(--success)') : 'var(--pink)',
+                              }}>
+                                {afford.affordable && !afford.tight && `✓ Yes — ${afford.after.toFixed(0)} TND still safe after`}
+                                {afford.affordable && afford.tight && `⚠️ Yes, but you'll only have ${afford.after.toFixed(0)} TND safe left`}
+                                {!afford.affordable && `✗ No — this dips ${Math.abs(afford.after).toFixed(0)} TND into your goals/bills`}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+
                     {bought.map(item => (
                       <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 16px', borderBottom: '0.5px solid var(--border)', opacity: 0.45 }}>
                         <button onClick={() => toggleItem(group.id, item.id)} style={{
-                          width: 22, height: 22, borderRadius: 6, border: 'none', background: 'var(--success)', cursor: 'pointer', flexShrink: 0,
+                          width: 22, height: 22, borderRadius: 6, border: 'none', background: '#7EC8A0', cursor: 'pointer', flexShrink: 0,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                         }}>
                           <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
@@ -179,7 +221,6 @@ export default function WishlistPage() {
                       </div>
                     ))}
 
-                    {/* Add item inline */}
                     {isAddingHere ? (
                       <div style={{ padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                         <input

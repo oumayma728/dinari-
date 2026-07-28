@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Dinari 💸
 
-## Getting Started
+A personal finance tracker PWA built for Tunisian users. Installable on iPhone via Safari → Add to Home Screen. All data stored locally on device — no account, no server.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 🏠 Home
+- Balance card: **Salary** + **Carryover from last month** = Total Balance (tap any number to edit inline)
+- **Planned remaining** — balance minus active category budgets and saved goal amounts
+- **Actual remaining** — real balance after income/expense transactions this month
+- Active categories list with budget vs spent + progress bar
+- Last 5 transactions this month
+- 🔥 **Streak counter** — consecutive days with a logged transaction
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 💸 Transactions
+- Full history with month filter, filter by All / Income / Expenses
+- Monthly totals (in / out)
+- Add, edit, delete transactions (amount, type, description, date, category)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 🏷️ Categories
+- Add categories with name, emoji, type (Fixed / Variable / One-time), and budget
+- Tick/untick active this month
+- Expand to edit budget, priority (slider), type, or delete
+- Sorted by priority on home screen
 
-## Learn More
+### 🎯 Saving Goals
+- Create goals with name, emoji, target amount, and optional deadline
+- SVG progress circle with % + monthly/weekly saving needed auto-calculated
+- Deadline countdown badge, edit saved amount anytime
 
-To learn more about Next.js, take a look at the following resources:
+### ❤️ Wishlist
+- Groups with items (name + optional price)
+- Tick items as bought
+- **🎯 Goal button** — converts any priced item into a saving goal in one tap
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 🤖 AI Advisor
+- Chat interface with voice input (iOS Safari compatible)
+- AI has full context: balance, categories, goals, wishlist, recent transactions
+- Responds in **Tunisian Darija + French/English** mix
+- Chat history persists across sessions
+- Quick suggestion prompts on empty state
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### ⚙️ Settings
+- Edit name, reset all data
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Stack
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Next.js 14** App Router + TypeScript
+- **Groq API** (llama-3.3-70b) — server-side only, key never exposed to browser
+- **localStorage** for all data (`dinari_v4`)
+- **next-pwa** — installable on iPhone via Safari
+- Pink theme `#C4607A`, mobile-first (max-width 430px)
