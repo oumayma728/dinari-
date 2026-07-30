@@ -74,7 +74,7 @@ const plannedRemaining = balance - tickedBudget
     .filter(t => t.type === 'income' && isThisMonth(t.date))
     .reduce((s, t) => s + t.amount, 0)
 
-  const actualRemaining = balance + monthIncome - monthExpenses
+  const actualRemaining = balance + monthIncome - monthExpenses - challengeReserved
 
   return { balance, plannedRemaining, actualRemaining, tickedBudget, challengeReserved, monthExpenses, monthIncome }
 }
@@ -93,14 +93,11 @@ export function getCategorySpent(data: AppData, categoryId: string): number {
 
 export function getSafeToSpend(data: AppData) {
   const stats = calcStats(data)
-  const essentialReserved = data.challenges
-    .filter(c => c.active && c.isEssential)
-    .reduce((s, c) => s + c.savedAmount, 0)
   const unpaidFixed = data.categories
     .filter(c => c.type === 'fixed' && c.activeThisMonth)
     .reduce((sum, c) => sum + Math.max(c.budget - getCategorySpent(data, c.id), 0), 0)
-  const raw = stats.actualRemaining - essentialReserved - unpaidFixed
-  return { safe: Math.max(raw, 0), raw, unpaidFixed, challengeReserved: essentialReserved }
+  const raw = stats.actualRemaining - unpaidFixed
+  return { safe: Math.max(raw, 0), raw, unpaidFixed, challengeReserved: stats.challengeReserved }
 }
 
 export function canAfford(data: AppData, amount: number) {
