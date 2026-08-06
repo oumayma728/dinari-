@@ -61,8 +61,8 @@ export default function AddTransactionModal({ categories, prefill, onAdd, onClos
         {/* Amount */}
         <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg)', borderRadius: 14, padding: '14px 18px', marginBottom: 12 }}>
           <input
-            type="number" inputMode="decimal" value={amount}
-            onChange={e => setAmount(e.target.value)} autoFocus placeholder="0"
+            type="text" inputMode="decimal" value={amount}
+            onChange={e => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} autoFocus placeholder="0"
             style={{ flex: 1, border: 'none', outline: 'none', background: 'none', fontSize: 28, fontWeight: 700, letterSpacing: '-0.8px', color: 'var(--text)' }}
           />
           <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--muted)' }}>TND</span>

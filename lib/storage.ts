@@ -64,7 +64,7 @@ export function calcStats(data: AppData) {
     .filter(c => c.active)
     .reduce((s, c) => s + c.savedAmount, 0)
 
-const plannedRemaining = balance - tickedBudget
+const plannedRemaining = balance - tickedBudget - challengeReserved
 
   const monthExpenses = data.transactions
     .filter(t => t.type === 'expense' && isThisMonth(t.date))
