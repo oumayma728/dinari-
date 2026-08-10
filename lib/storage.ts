@@ -78,7 +78,23 @@ const plannedRemaining = balance - tickedBudget - challengeReserved
 
   return { balance, plannedRemaining, actualRemaining, tickedBudget, challengeReserved, monthExpenses, monthIncome }
 }
-
+export function exportData(): string {
+  return JSON.stringify(loadData(), null, 2)
+}
+ 
+export function importData(json: string): { ok: true } | { ok: false; error: string } {
+  try {
+    const parsed = JSON.parse(json)
+    if (typeof parsed !== 'object' || parsed === null) {
+      return { ok: false, error: 'File does not contain valid Dinari data.' }
+    }
+    saveData({ ...defaults, ...parsed } as AppData)
+    return { ok: true }
+  } catch {
+    return { ok: false, error: 'Could not read that file as JSON.' }
+  }
+}
+ 
 export function getUpcomingIncome(data: AppData): IncomeSource[] {
   return data.incomeSources
     .filter(s => !s.received)
