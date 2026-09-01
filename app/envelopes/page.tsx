@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
-import { loadData, saveData, calcStats } from '@/lib/storage'
+import { loadData, saveData, calcStats, checkMonthlyReset } from '@/lib/storage'
 import { AppData, Challenge } from '@/lib/types'
 import BottomNav from '@/components/BottomNav'
 import EnvelopeCard from '@/components/EnvelopeCard'
@@ -20,7 +20,12 @@ export default function EnvelopesPage() {
   const [showStuff, setShowStuff] = useState(false)
   const [stuffAmounts, setStuffAmounts] = useState<Record<string, string>>({})
 
-  useEffect(() => { setData(loadData()) }, [])
+  useEffect(() => {
+    let d = loadData()
+    d = checkMonthlyReset(d)
+    saveData(d)
+    setData(d)
+  }, [])
 
   const stats = useMemo(() => data ? calcStats(data) : null, [data])
 
@@ -50,8 +55,16 @@ export default function EnvelopesPage() {
     return (y - now.getFullYear()) * 12 + (m - (now.getMonth() + 1))
   }
 
-  const updateSaved = (id: string, val: number) =>
-    persist({ ...data, challenges: data.challenges.map(c => c.id === id ? { ...c, savedAmount: Math.max(0, Math.min(c.targetAmount, val)) } : c) })
+  const setMonthAmount = (id: string, month: string, amount: number) =>
+    persist({
+      ...data,
+      challenges: data.challenges.map(c => {
+        if (c.id !== id) return c
+        const history = { ...(c.monthlyHistory || {}), [month]: amount }
+        const savedAmount = Math.min(c.targetAmount, Object.values(history).reduce((s, v) => s + v, 0))
+        return { ...c, monthlyHistory: history, savedAmount }
+      }),
+    })
 
   const toggleEssential = (id: string) =>
     persist({ ...data, challenges: data.challenges.map(c => c.id === id ? { ...c, isEssential: !c.isEssential } : c) })
@@ -60,10 +73,14 @@ export default function EnvelopesPage() {
     persist({ ...data, challenges: data.challenges.filter(c => c.id !== id) })
 
   const confirmStuff = () => {
+    const currentMonth = new Date().toISOString().slice(0, 7)
     const updated = data.challenges.map(c => {
+      if (!c.active) return c
       const add = parseFloat(stuffAmounts[c.id] || '0') || 0
-      if (add <= 0 || !c.active) return c
-      return { ...c, savedAmount: Math.min(c.targetAmount, c.savedAmount + add) }
+      if (add <= 0) return c
+      const history = { ...(c.monthlyHistory || {}), [currentMonth]: (c.monthlyHistory?.[currentMonth] || 0) + add }
+      const savedAmount = Math.min(c.targetAmount, Object.values(history).reduce((s, v) => s + v, 0))
+      return { ...c, monthlyHistory: history, savedAmount }
     })
     persist({ ...data, challenges: updated })
     setShowStuff(false); setStuffAmounts({})
@@ -180,7 +197,7 @@ export default function EnvelopesPage() {
               <EnvelopeCard
                 key={c.id}
                 challenge={c}
-                onUpdateSaved={updateSaved}
+                onSetMonthAmount={setMonthAmount}
                 onToggleEssential={toggleEssential}
                 onDelete={deleteChallenge}
                 monthsLeft={monthsLeft}
