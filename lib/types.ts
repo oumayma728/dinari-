@@ -39,6 +39,7 @@ export interface Challenge {
   isEssential?: boolean        // counted toward safe-to-spend reserve
   monthlyContribution?: number // suggested amount to stuff per month
   monthlyHistory?: Record<string, number> // { "2026-08": 200, "2026-09": 0, … }
+  baseAmount?: number          // savings that existed before monthlyHistory tracking began
 }
 
 export interface WishlistItem {

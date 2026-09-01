@@ -128,6 +128,14 @@ export default function EnvelopeCard({ challenge: c, onSetMonthAmount, onToggleE
 
             <div style={{ height: '0.5px', background: 'rgba(0,0,0,0.08)', margin: '4px 0 7px' }} />
 
+            {/* Legacy amount row (savings before monthly tracking) */}
+            {(c.baseAmount ?? 0) > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <span style={{ flex: 1, fontSize: 10, fontWeight: 500, color: '#BDB5B0', fontStyle: 'italic' }}>Before tracking</span>
+                <span className="num" style={{ fontSize: 11, fontWeight: 700, color: '#BDB5B0' }}>{c.baseAmount!.toFixed(0)} TND</span>
+              </div>
+            )}
+
             {/* Monthly rows */}
             {months.map(month => {
               const amount = history[month]
