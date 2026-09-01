@@ -60,9 +60,12 @@ export default function EnvelopesPage() {
       ...data,
       challenges: data.challenges.map(c => {
         if (c.id !== id) return c
+        const noHistory = !c.monthlyHistory || Object.keys(c.monthlyHistory).length === 0
+        const base = noHistory ? c.savedAmount : (c.baseAmount || 0)
         const history = { ...(c.monthlyHistory || {}), [month]: amount }
-        const savedAmount = Math.min(c.targetAmount, Object.values(history).reduce((s, v) => s + v, 0))
-        return { ...c, monthlyHistory: history, savedAmount }
+        const historySum = Object.values(history).reduce((s, v) => s + v, 0)
+        const savedAmount = Math.min(c.targetAmount, base + historySum)
+        return { ...c, monthlyHistory: history, savedAmount, baseAmount: base }
       }),
     })
 
@@ -78,9 +81,12 @@ export default function EnvelopesPage() {
       if (!c.active) return c
       const add = parseFloat(stuffAmounts[c.id] || '0') || 0
       if (add <= 0) return c
+      const noHistory = !c.monthlyHistory || Object.keys(c.monthlyHistory).length === 0
+      const base = noHistory ? c.savedAmount : (c.baseAmount || 0)
       const history = { ...(c.monthlyHistory || {}), [currentMonth]: (c.monthlyHistory?.[currentMonth] || 0) + add }
-      const savedAmount = Math.min(c.targetAmount, Object.values(history).reduce((s, v) => s + v, 0))
-      return { ...c, monthlyHistory: history, savedAmount }
+      const historySum = Object.values(history).reduce((s, v) => s + v, 0)
+      const savedAmount = Math.min(c.targetAmount, base + historySum)
+      return { ...c, monthlyHistory: history, savedAmount, baseAmount: base }
     })
     persist({ ...data, challenges: updated })
     setShowStuff(false); setStuffAmounts({})
