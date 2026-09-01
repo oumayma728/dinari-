@@ -38,6 +38,7 @@ export interface Challenge {
   deadline?: string            // YYYY-MM
   isEssential?: boolean        // counted toward safe-to-spend reserve
   monthlyContribution?: number // suggested amount to stuff per month
+  monthlyHistory?: Record<string, number> // { "2026-08": 200, "2026-09": 0, … }
 }
 
 export interface WishlistItem {
@@ -66,4 +67,5 @@ export interface AppData {
   safeStreak: number
   lastSafeMonthChecked?: string // YYYY-MM
   themeColor?: string
+  pendingCarryover?: number     // raw cash remaining, updated on every save for month-end rollover
 }

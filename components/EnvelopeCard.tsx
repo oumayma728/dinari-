@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Star, Pencil, Trash2, Plus } from 'lucide-react'
+import { Star, Trash2 } from 'lucide-react'
 import { Challenge } from '@/lib/types'
 
 const PASTELS = [
@@ -14,39 +14,55 @@ const PASTELS = [
 
 function getPastel(id: string) {
   let h = 0
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) & 0x7fffffff
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) & 0x7fffffff
   return PASTELS[h % PASTELS.length]
+}
+
+function fmtMonth(ym: string) {
+  const [y, m] = ym.split('-').map(Number)
+  const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  return `${names[m - 1]} ${y}`
 }
 
 interface Props {
   challenge: Challenge
-  onUpdateSaved: (id: string, val: number) => void
+  onSetMonthAmount: (id: string, month: string, amount: number) => void
   onToggleEssential: (id: string) => void
   onDelete: (id: string) => void
   monthsLeft: (deadline: string) => number
 }
 
-export default function EnvelopeCard({ challenge: c, onUpdateSaved, onToggleEssential, onDelete, monthsLeft }: Props) {
+export default function EnvelopeCard({ challenge: c, onSetMonthAmount, onToggleEssential, onDelete, monthsLeft }: Props) {
   const [isOpen, setIsOpen] = useState(false)
-  const [showEdit, setShowEdit] = useState(false)
+  const [editingMonth, setEditingMonth] = useState<string | null>(null)
   const [editVal, setEditVal] = useState('')
-  const [showAdd, setShowAdd] = useState(false)
-  const [addVal, setAddVal] = useState('')
 
   const p = getPastel(c.id)
   const pct = c.targetAmount > 0 ? Math.min(100, Math.round((c.savedAmount / c.targetAmount) * 100)) : 0
   const done = pct >= 100
   const ml = c.deadline ? monthsLeft(c.deadline) : null
-  const monthly = ml && ml > 0 ? (c.targetAmount - c.savedAmount) / ml : null
+  const currentMonth = new Date().toISOString().slice(0, 7)
 
-  const handleCardClick = () => {
-    if (showEdit || showAdd) return
-    setIsOpen(o => !o)
+  const history = c.monthlyHistory || {}
+  const historyMonths = Object.keys(history).sort((a, b) => b.localeCompare(a))
+  const months = historyMonths.includes(currentMonth)
+    ? historyMonths
+    : [currentMonth, ...historyMonths]
+
+  const startEdit = (month: string) => {
+    setEditVal(history[month] !== undefined ? String(history[month]) : '')
+    setEditingMonth(month)
+  }
+
+  const confirmEdit = (month: string) => {
+    const v = parseFloat(editVal)
+    if (!isNaN(v) && v >= 0) onSetMonthAmount(c.id, month, v)
+    setEditingMonth(null)
   }
 
   return (
     <div
-      onClick={handleCardClick}
+      onClick={() => { if (!editingMonth) setIsOpen(o => !o) }}
       style={{
         background: p.bg,
         borderRadius: 18,
@@ -55,7 +71,6 @@ export default function EnvelopeCard({ challenge: c, onUpdateSaved, onToggleEsse
         overflow: 'hidden',
         boxShadow: '0 2px 8px rgba(26,22,20,0.07)',
         opacity: c.active ? 1 : 0.55,
-        transition: 'box-shadow 0.15s',
       }}
     >
       {/* Envelope flap */}
@@ -70,135 +85,103 @@ export default function EnvelopeCard({ challenge: c, onUpdateSaved, onToggleEsse
         </svg>
       </div>
 
-      {/* Closed body: icon + name */}
+      {/* Body */}
       <div style={{
-        padding: '0 10px 14px',
+        padding: '0 12px 12px',
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        marginTop: isOpen ? 8 : -6,
+        marginTop: isOpen ? 10 : -6,
         transition: 'margin-top 0.25s ease',
       }}>
-        <span style={{ fontSize: 26, lineHeight: 1, marginBottom: 5 }}>{c.icon || '🎯'}</span>
+        <span style={{ fontSize: 26, lineHeight: 1, marginBottom: 4 }}>{c.icon || '🎯'}</span>
         <p style={{
           fontSize: 11, fontWeight: 700, margin: 0, textAlign: 'center', color: '#2A2018',
-          letterSpacing: '-0.1px', overflow: 'hidden', textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap', maxWidth: '100%',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%',
         }}>
           {c.name}
         </p>
 
-        {/* Open detail panel */}
+        {/* Closed: summary */}
+        {!isOpen && (
+          <p className="num" style={{ fontSize: 10, color: '#9B8E86', margin: '3px 0 0', fontWeight: 600 }}>
+            {c.savedAmount.toFixed(0)} / {c.targetAmount.toFixed(0)} TND
+          </p>
+        )}
+
+        {/* Open: full detail */}
         {isOpen && (
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{ width: '100%', marginTop: 10 }}
-          >
-            {/* Amounts */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
-              <span className="num" style={{ fontSize: 16, fontWeight: 700, color: '#1A1614' }}>{c.savedAmount.toFixed(0)}</span>
-              <span className="num" style={{ fontSize: 10, color: '#9B8E86' }}>/ {c.targetAmount.toFixed(0)} TND</span>
-            </div>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', marginTop: 10 }}>
 
             {/* Progress */}
-            <div style={{ background: 'rgba(0,0,0,0.09)', borderRadius: 99, height: 4, marginBottom: 5 }}>
-              <div style={{
-                background: done ? '#4A8C5C' : 'var(--pink)',
-                borderRadius: 99, height: 4,
-                width: `${pct}%`, transition: 'width 0.4s',
-              }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span className="num" style={{ fontSize: 13, fontWeight: 700, color: '#1A1614' }}>{c.savedAmount.toFixed(0)}</span>
+              <span className="num" style={{ fontSize: 10, color: '#9B8E86' }}>/ {c.targetAmount.toFixed(0)} TND</span>
             </div>
-
-            {/* Deadline/monthly */}
+            <div style={{ background: 'rgba(0,0,0,0.09)', borderRadius: 99, height: 4, marginBottom: 4 }}>
+              <div style={{ background: done ? '#4A8C5C' : 'var(--pink)', borderRadius: 99, height: 4, width: `${pct}%`, transition: 'width 0.4s' }} />
+            </div>
+            {done && <p style={{ fontSize: 9, color: '#4A8C5C', fontWeight: 700, margin: '0 0 5px' }}>✓ Goal reached!</p>}
             {!done && ml !== null && ml >= 0 && (
-              <p style={{ fontSize: 10, color: ml <= 2 ? 'var(--pink)' : '#9B8E86', margin: '0 0 3px', fontWeight: 600 }}>
-                {ml === 0 ? 'This month' : `${ml}mo left`}
-                {monthly !== null ? ` · ${monthly.toFixed(0)}/mo` : ''}
+              <p style={{ fontSize: 9, color: ml <= 2 ? 'var(--pink)' : '#9B8E86', margin: '0 0 5px', fontWeight: 600 }}>
+                {ml === 0 ? 'This month!' : `${ml} months left`}
               </p>
             )}
-            {done && <p style={{ fontSize: 10, color: '#4A8C5C', fontWeight: 700, margin: '0 0 3px' }}>✓ Done!</p>}
 
-            {/* Add money input */}
-            {showAdd && (
-              <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-                <input
-                  type="number" inputMode="decimal" value={addVal}
-                  onChange={e => setAddVal(e.target.value)}
-                  placeholder="Add amount"
-                  autoFocus
-                  onClick={e => e.stopPropagation()}
-                  style={{ flex: 1, border: 'none', outline: 'none', background: 'rgba(0,0,0,0.07)', borderRadius: 8, padding: '6px 8px', fontSize: 12, fontWeight: 600, minWidth: 0 }}
-                />
-                <button
-                  onClick={e => {
-                    e.stopPropagation()
-                    const v = parseFloat(addVal) || 0
-                    if (v > 0) onUpdateSaved(c.id, c.savedAmount + v)
-                    setAddVal(''); setShowAdd(false)
-                  }}
-                  style={{ padding: '6px 9px', borderRadius: 8, border: 'none', background: 'var(--pink)', color: 'white', fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
-                >
-                  +
-                </button>
-                <button
-                  onClick={e => { e.stopPropagation(); setShowAdd(false); setAddVal('') }}
-                  style={{ padding: '6px 8px', borderRadius: 8, border: 'none', background: 'rgba(0,0,0,0.07)', color: '#9B8E86', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
-                >
-                  ✕
-                </button>
-              </div>
-            )}
+            <div style={{ height: '0.5px', background: 'rgba(0,0,0,0.08)', margin: '4px 0 7px' }} />
 
-            {/* Edit total input */}
-            {showEdit && (
-              <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-                <input
-                  type="number" inputMode="decimal" value={editVal}
-                  onChange={e => setEditVal(e.target.value)}
-                  placeholder="Total saved"
-                  autoFocus
-                  onClick={e => e.stopPropagation()}
-                  style={{ flex: 1, border: 'none', outline: 'none', background: 'rgba(0,0,0,0.07)', borderRadius: 8, padding: '6px 8px', fontSize: 12, fontWeight: 600, minWidth: 0 }}
-                />
-                <button
-                  onClick={e => { e.stopPropagation(); onUpdateSaved(c.id, parseFloat(editVal) || 0); setShowEdit(false) }}
-                  style={{ padding: '6px 9px', borderRadius: 8, border: 'none', background: 'var(--pink)', color: 'white', fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
-                >
-                  OK
-                </button>
-              </div>
-            )}
+            {/* Monthly rows */}
+            {months.map(month => {
+              const amount = history[month]
+              const isCurrent = month === currentMonth
+              const isEditing = editingMonth === month
+              const hasEntry = amount !== undefined
 
-            {/* Action row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 4 }}>
-              {!showAdd && !done && (
-                <button
-                  onClick={e => { e.stopPropagation(); setShowAdd(true); setShowEdit(false) }}
-                  style={{
-                    flex: 1, padding: '6px 0', borderRadius: 8, border: 'none',
-                    background: 'var(--pink)', color: 'white', fontSize: 10, fontWeight: 700,
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3,
-                  }}
-                >
-                  <Plus size={10} /> Stuff
-                </button>
-              )}
-              <button
-                onClick={e => { e.stopPropagation(); onToggleEssential(c.id) }}
-                title="Mark essential (counts in safe-to-spend)"
-                style={{ padding: 5, borderRadius: 7, border: 'none', background: 'rgba(0,0,0,0.06)', cursor: 'pointer', display: 'flex' }}
-              >
-                <Star size={11} fill={c.isEssential ? 'var(--pink)' : 'none'} color={c.isEssential ? 'var(--pink)' : '#BDB5B0'} />
+              return (
+                <div key={month} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, minHeight: 24 }}>
+                  <span style={{ flex: 1, fontSize: 10, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? '#2A2018' : '#9B8E86' }}>
+                    {fmtMonth(month)}
+                  </span>
+
+                  {isEditing ? (
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      <input
+                        type="text" inputMode="decimal" value={editVal}
+                        onChange={e => setEditVal(e.target.value.replace(/[^0-9.]/g, ''))}
+                        onBlur={() => confirmEdit(month)}
+                        onKeyDown={e => { if (e.key === 'Enter') confirmEdit(month); if (e.key === 'Escape') setEditingMonth(null) }}
+                        autoFocus
+                        onClick={e => e.stopPropagation()}
+                        style={{ width: 58, border: 'none', outline: 'none', background: 'rgba(0,0,0,0.08)', borderRadius: 7, padding: '4px 6px', fontSize: 11, fontWeight: 700, textAlign: 'right' }}
+                      />
+                      <span style={{ fontSize: 9, color: '#9B8E86', fontWeight: 600 }}>TND</span>
+                    </div>
+                  ) : hasEntry ? (
+                    <button onClick={e => { e.stopPropagation(); startEdit(month) }}
+                      style={{ border: 'none', background: 'rgba(0,0,0,0.05)', borderRadius: 7, padding: '3px 7px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <span className="num" style={{ fontSize: 11, fontWeight: 700, color: '#2A2018' }}>{amount.toFixed(0)}</span>
+                      <span style={{ fontSize: 9, color: '#9B8E86', fontWeight: 600 }}>TND</span>
+                    </button>
+                  ) : (
+                    <button onClick={e => { e.stopPropagation(); startEdit(month) }}
+                      style={{ border: 'none', background: 'var(--pink)', borderRadius: 7, padding: '3px 11px', cursor: 'pointer' }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'white', lineHeight: 1 }}>+</span>
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+
+            <div style={{ height: '0.5px', background: 'rgba(0,0,0,0.08)', margin: '6px 0' }} />
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end', alignItems: 'center' }}>
+              <button onClick={e => { e.stopPropagation(); onToggleEssential(c.id) }}
+                style={{ padding: '4px 8px', borderRadius: 7, border: 'none', background: 'rgba(0,0,0,0.05)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}>
+                <Star size={10} fill={c.isEssential ? 'var(--pink)' : 'none'} color={c.isEssential ? 'var(--pink)' : '#BDB5B0'} />
+                {c.isEssential && <span style={{ fontSize: 9, color: 'var(--pink)', fontWeight: 700 }}>Essential</span>}
               </button>
-              <button
-                onClick={e => { e.stopPropagation(); setEditVal(String(c.savedAmount)); setShowEdit(s => !s); setShowAdd(false) }}
-                style={{ padding: 5, borderRadius: 7, border: 'none', background: 'rgba(0,0,0,0.06)', cursor: 'pointer', display: 'flex' }}
-              >
-                <Pencil size={11} color="#BDB5B0" />
-              </button>
-              <button
-                onClick={e => { e.stopPropagation(); onDelete(c.id) }}
-                style={{ padding: 5, borderRadius: 7, border: 'none', background: 'rgba(0,0,0,0.06)', cursor: 'pointer', display: 'flex' }}
-              >
-                <Trash2 size={11} color="#BDB5B0" />
+              <button onClick={e => { e.stopPropagation(); onDelete(c.id) }}
+                style={{ padding: '4px 6px', borderRadius: 7, border: 'none', background: 'rgba(0,0,0,0.05)', cursor: 'pointer', display: 'flex' }}>
+                <Trash2 size={10} color="#BDB5B0" />
               </button>
             </div>
           </div>

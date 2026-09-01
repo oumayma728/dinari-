@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
 import {
   loadData, saveData, calcStats, getCategorySpent, isThisMonth,
-  updateStreak, updateSafeStreak, getSafeToSpend,
+  updateStreak, updateSafeStreak, getSafeToSpend, checkMonthlyReset,
 } from '@/lib/storage'
 
 import { AppData, IncomeSource } from '@/lib/types'
@@ -31,6 +31,7 @@ export default function Home() {
 
   useEffect(() => {
     let d = loadData()
+    d = checkMonthlyReset(d)
     d = updateSafeStreak(d)
     saveData(d)
     setData(d)

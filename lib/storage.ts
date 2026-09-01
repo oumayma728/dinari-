@@ -37,10 +37,26 @@ export function loadData(): AppData {
 }
 
 export function saveData(data: AppData): AppData {
-  _cache = data
+  const stats = calcStats(data)
+  const rawCash = Math.max(0, stats.actualRemaining + stats.challengeReserved)
+  const withPending = { ...data, pendingCarryover: rawCash }
+  _cache = withPending
   if (typeof window !== 'undefined')
-    setTimeout(() => localStorage.setItem(KEY, JSON.stringify(data)), 0)
-  return data
+    setTimeout(() => localStorage.setItem(KEY, JSON.stringify(withPending)), 0)
+  return withPending
+}
+
+export function checkMonthlyReset(data: AppData): AppData {
+  const currentMonth = new Date().toISOString().slice(0, 7)
+  if (data.lastSafeMonthChecked === currentMonth) return data
+  return {
+    ...data,
+    carryover: data.pendingCarryover ?? data.carryover,
+    incomeSources: data.incomeSources.map(s => ({ ...s, received: false })),
+    categories: data.categories.map(c =>
+      c.type === 'one-time' ? { ...c, activeThisMonth: false } : c
+    ),
+  }
 }
 
 export function isThisMonth(dateStr: string): boolean {
