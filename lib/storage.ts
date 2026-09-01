@@ -76,9 +76,10 @@ export function calcStats(data: AppData) {
     .filter(c => c.activeThisMonth)
     .reduce((s, c) => s + c.budget, 0)
 
+  const currentMonth = new Date().toISOString().slice(0, 7)
   const challengeReserved = data.challenges
     .filter(c => c.active)
-    .reduce((s, c) => s + c.savedAmount, 0)
+    .reduce((s, c) => s + (c.monthlyHistory?.[currentMonth] || 0), 0)
 
 const plannedRemaining = balance - tickedBudget - challengeReserved
 
