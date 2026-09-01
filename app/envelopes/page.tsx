@@ -4,6 +4,7 @@ import { loadData, saveData, calcStats, checkMonthlyReset } from '@/lib/storage'
 import { AppData, Challenge } from '@/lib/types'
 import BottomNav from '@/components/BottomNav'
 import EnvelopeCard from '@/components/EnvelopeCard'
+import EnvelopeModal from '@/components/EnvelopeModal'
 
 export default function EnvelopesPage() {
   const [data, setData] = useState<AppData | null>(null)
@@ -19,6 +20,9 @@ export default function EnvelopesPage() {
   // Stuff panel
   const [showStuff, setShowStuff] = useState(false)
   const [stuffAmounts, setStuffAmounts] = useState<Record<string, string>>({})
+
+  // Envelope modal
+  const [openId, setOpenId] = useState<string | null>(null)
 
   useEffect(() => {
     let d = loadData()
@@ -55,14 +59,13 @@ export default function EnvelopesPage() {
     return (y - now.getFullYear()) * 12 + (m - (now.getMonth() + 1))
   }
 
-  const setMonthAmount = (id: string, month: string, amount: number) =>
+  const saveHistory = (id: string, history: Record<string, number>) =>
     persist({
       ...data,
       challenges: data.challenges.map(c => {
         if (c.id !== id) return c
         const noHistory = !c.monthlyHistory || Object.keys(c.monthlyHistory).length === 0
         const base = noHistory ? c.savedAmount : (c.baseAmount || 0)
-        const history = { ...(c.monthlyHistory || {}), [month]: amount }
         const historySum = Object.values(history).reduce((s, v) => s + v, 0)
         const savedAmount = Math.min(c.targetAmount, base + historySum)
         return { ...c, monthlyHistory: history, savedAmount, baseAmount: base }
@@ -203,10 +206,7 @@ export default function EnvelopesPage() {
               <EnvelopeCard
                 key={c.id}
                 challenge={c}
-                onSetMonthAmount={setMonthAmount}
-                onToggleEssential={toggleEssential}
-                onDelete={deleteChallenge}
-                monthsLeft={monthsLeft}
+                onOpen={setOpenId}
               />
             ))}
           </div>
@@ -220,6 +220,19 @@ export default function EnvelopesPage() {
           )
         )}
       </div>
+
+      {openId && (() => {
+        const c = data.challenges.find(ch => ch.id === openId)
+        return c ? (
+          <EnvelopeModal
+            challenge={c}
+            onSave={saveHistory}
+            onToggleEssential={toggleEssential}
+            onDelete={deleteChallenge}
+            onClose={() => setOpenId(null)}
+          />
+        ) : null
+      })()}
 
       <div className="pb-nav" />
       <BottomNav />
